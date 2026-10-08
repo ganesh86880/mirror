@@ -146,7 +146,7 @@ async def ingest_citizen_report(
 
     if not body_text:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422),
             detail="A non-empty 'text_report' is required to parse the citizen incident.",
         )
 

@@ -39,12 +39,27 @@ app = FastAPI(
 # Register routers
 app.include_router(ingest_router)
 
+<<<<<<< HEAD
 # CORS: Production configuration supporting Vercel and local development
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
+=======
+# CORS Security: Allow frontend development origins
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "*",
+    ],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+>>>>>>> 8bd23fc31462b179359347c7437d1fe2595cd9b2
     allow_headers=["*"],
 )
 
