@@ -488,6 +488,7 @@ export default function MapContainer({
     return () => {
       map.remove();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Update route ribbons whenever selectedAction changes

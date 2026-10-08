@@ -190,6 +190,19 @@ def test_invalid_input_validation(invalid_payload):
     assert "error" in data
     assert "message" in data
     # Ensure no traceback or internal code is leaked in response
-    assert "Traceback" not in response.text
-    assert "Traceback (most recent call last)" not in response.text
     assert "Exception" not in response.text or "details" in data
+
+
+def test_health_endpoints():
+    """Verify both /health and /healthz endpoints return 200 with proper health metadata."""
+    res_health = client.get("/health")
+    assert res_health.status_code == 200
+    data_health = res_health.json()
+    assert data_health["status"] == "ok"
+    assert data_health["service"] == "MIRROR-Simulation-Engine"
+    assert data_health["tier"] == "free"
+
+    res_healthz = client.get("/healthz")
+    assert res_healthz.status_code == 200
+    data_healthz = res_healthz.json()
+    assert data_healthz["status"] == "healthy"

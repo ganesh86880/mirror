@@ -49,8 +49,14 @@ app.add_middleware(
 )
 
 
+@app.get("/health", tags=["Health"], summary="Fast Free-Tier Health Check")
+def health_check() -> Dict[str, str]:
+    """Lightweight health check endpoint for Render free tier and uptime monitors."""
+    return {"status": "ok", "service": "MIRROR-Simulation-Engine", "tier": "free"}
+
+
 @app.get("/healthz", tags=["Health"], summary="Service Health Check")
-async def health_check() -> Dict[str, str]:
+async def healthz_check() -> Dict[str, str]:
     """Lightweight health check endpoint for cloud platform probes."""
     return {"status": "healthy", "service": "MIRROR Backend API"}
 
