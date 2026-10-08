@@ -5,9 +5,15 @@ import { AlertCircle, Flame, Waves, AlertTriangle, Radio, Truck, Activity } from
 
 interface LeftPanelProps {
   isDispatched?: boolean;
+  isFireDispatched?: boolean;
+  onDispatchFire?: () => void;
 }
 
-export default function LeftPanel({ isDispatched = false }: LeftPanelProps) {
+export default function LeftPanel({
+  isDispatched = false,
+  isFireDispatched = false,
+  onDispatchFire,
+}: LeftPanelProps) {
   const incidents = [
     {
       id: "INC-04",
@@ -58,10 +64,10 @@ export default function LeftPanel({ isDispatched = false }: LeftPanelProps) {
     {
       id: "FE-01",
       type: "HEAVY PUMPER",
-      status: "STANDBY",
-      statusColor: "#8B949E",
-      speed: "0 km/h",
-      destination: "Sec 04 Perimeter",
+      status: isFireDispatched ? "DISPATCHED // EN ROUTE" : "STANDBY",
+      statusColor: isFireDispatched ? "#C53030" : "#8B949E",
+      speed: isFireDispatched ? "58 km/h" : "0 km/h",
+      destination: isFireDispatched ? "Sec 04 Fire Hazard" : "Sec 04 Perimeter",
     },
   ];
 
@@ -188,6 +194,18 @@ export default function LeftPanel({ isDispatched = false }: LeftPanelProps) {
                   <span>Dest: {u.destination}</span>
                   <span className="text-tactical-text">{u.speed}</span>
                 </div>
+                {u.id === "FE-01" && (
+                  <button
+                    onClick={onDispatchFire}
+                    className={`mt-1 py-1 px-2 rounded text-[10px] font-mono font-bold transition-all flex items-center justify-center gap-1.5 border ${
+                      isFireDispatched
+                        ? "bg-[#C5303020] text-tactical-crimson border-tactical-crimson/50"
+                        : "bg-tactical-bg text-tactical-amber border-tactical-amber/50 hover:bg-tactical-amber hover:text-black"
+                    }`}
+                  >
+                    <span>{isFireDispatched ? "FE-01 EN ROUTE SEC 04" : "[ DISPATCH FE-01 TO FIRE ]"}</span>
+                  </button>
+                )}
               </div>
             ))}
           </div>

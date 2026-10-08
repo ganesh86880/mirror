@@ -4,7 +4,7 @@ Exposes REST APIs for Digital Twin Situational State and What-If Consequence Sim
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +20,7 @@ from app.schemas.simulation import (
 from app.schemas.twin import DigitalTwinState
 from app.simulation.consequence import compare_all_actions, simulate_action
 from app.simulation.mock_city import get_mock_twin_state
+from app.db import get_all_hospitals, get_all_units, get_all_incidents, dispatch_fire_engine
 
 # Configure production-clean logging (server-side only)
 logging.basicConfig(
@@ -113,8 +114,7 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
 
 
 @app.get("/", tags=["Health"])
-@app.get("/health", tags=["Health"])
-async def health_check() -> Dict[str, Any]:
+async def root_health_check() -> Dict[str, Any]:
     """Basic health check and service identification."""
     return {
         "status": "online",
@@ -182,6 +182,24 @@ async def compare_simulations() -> OutcomeComparisonResult:
     the lowest-risk option based on mathematical risk scores.
     """
     return compare_all_actions()
+
+
+@app.get("/api/db/hospitals", tags=["Database"])
+async def db_hospitals() -> List[Dict[str, Any]]:
+    """Returns persistent hospital records from SQLite database."""
+    return get_all_hospitals()
+
+
+@app.get("/api/db/units", tags=["Database"])
+async def db_units() -> List[Dict[str, Any]]:
+    """Returns persistent emergency units (Ambulances & Fire Engines) from SQLite database."""
+    return get_all_units()
+
+
+@app.post("/api/db/dispatch-fire", tags=["Database"])
+async def db_dispatch_fire() -> Dict[str, Any]:
+    """Dispatches Fire Engine FE-01 directly to Sector 04 Fire Hazard zone in database."""
+    return dispatch_fire_engine()
 
 
 if __name__ == "__main__":

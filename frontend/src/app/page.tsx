@@ -28,10 +28,72 @@ export default function MissionControlDashboard() {
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
   const [decisionLogs, setDecisionLogs] = useState<DecisionLogEntry[]>([]);
 
+  // Fire Engine dispatch state
+  const [isFireDispatched, setIsFireDispatched] = useState<boolean>(false);
+
   // Phase 4: Citizen Intake state
   const [isCitizenModalOpen, setIsCitizenModalOpen] = useState<boolean>(false);
   const [alertBanner, setAlertBanner] = useState<string | null>(null);
   const [obstacleMarker, setObstacleMarker] = useState<any>(null);
+
+  // Fire Engine dispatch handler
+  const handleDispatchFire = () => {
+    if (isFireDispatched) return; // Already dispatched
+    setIsFireDispatched(true);
+
+    const now = new Date();
+    const timeStr = now.toUTCString().split(" ")[4] + " UTC";
+
+    const logEntry: DecisionLogEntry = {
+      id: `LOG-FIRE-${Date.now()}`,
+      timestamp: timeStr,
+      actionCode: "FIRE-DISPATCH",
+      actionTitle: "FE-01 Dispatched to Sector 04 Fire Hazard",
+      details:
+        "Heavy Pumper FE-01 dispatched at 58 km/h to Sector 04 commercial zone blaze. Fire containment perimeter established.",
+      riskBefore: globalRisk,
+      riskAfter: Math.max(globalRisk - 8, 20),
+      targetFacility: "Sector 04 Fire Hazard Zone",
+    };
+
+    setDecisionLogs((prev) => [logEntry, ...prev]);
+    setGlobalRisk((prev) => Math.max(prev - 8, 20));
+    setIsDrawerOpen(true);
+
+    // Also update the backend database
+    fetch(
+      `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/db/dispatch-fire`,
+      { method: "POST" }
+    ).catch(() => {});
+  };
+
+  // Dismiss SOS alert and trigger alternative route search
+  const handleDismissAlert = () => {
+    setAlertBanner(null);
+    setObstacleMarker(null);
+
+    // When SOS is dismissed, search for alternative solutions
+    // If currently on a compromised route, switch to bypass
+    if (selectedAction === "OPTION_A") {
+      setSelectedAction("OPTION_B");
+      const now = new Date();
+      const timeStr = now.toUTCString().split(" ")[4] + " UTC";
+
+      const logEntry: DecisionLogEntry = {
+        id: `LOG-REROUTE-${Date.now()}`,
+        timestamp: timeStr,
+        actionCode: "AUTO-REROUTE",
+        actionTitle: "Auto-Rerouted: Obstacle Cleared, Bypass Maintained",
+        details:
+          "SOS obstacle report dismissed. System evaluated alternatives and maintained Route 3 Bypass as optimal corridor.",
+        riskBefore: globalRisk,
+        riskAfter: 34,
+        targetFacility: "Route 3 Alternate Pathway",
+      };
+
+      setDecisionLogs((prev) => [logEntry, ...prev]);
+    }
+  };
 
   // Citizen report ingestion handler
   const handleCitizenReportProcessed = (result: IngestReportResponse) => {
@@ -115,7 +177,11 @@ export default function MissionControlDashboard() {
     <main className="w-screen h-screen flex flex-row overflow-hidden bg-tactical-bg text-tactical-text font-sans">
       {/* 1. Left Panel (20% width): Incident & Fleet Telemetry */}
       <div className="w-[20%] min-w-[280px] h-full flex-shrink-0">
-        <LeftPanel isDispatched={isDispatched} />
+        <LeftPanel
+          isDispatched={isDispatched}
+          isFireDispatched={isFireDispatched}
+          onDispatchFire={handleDispatchFire}
+        />
       </div>
 
       {/* 2. Center Panel (55% width): Tactical 3D Geospatial Twin */}
@@ -126,6 +192,7 @@ export default function MissionControlDashboard() {
           isDispatched={isDispatched}
           onOpenCitizenModal={() => setIsCitizenModalOpen(true)}
           alertBanner={alertBanner}
+          onDismissAlert={handleDismissAlert}
         />
 
         {/* 3D Mapbox Viewport */}
@@ -135,6 +202,7 @@ export default function MissionControlDashboard() {
             sliderSeverity={sliderSeverity}
             onSliderChange={setSliderSeverity}
             isDispatched={isDispatched}
+            isFireDispatched={isFireDispatched}
             obstacleMarker={obstacleMarker}
           />
         </div>

@@ -142,6 +142,7 @@ interface MapContainerProps {
   sliderSeverity?: number;
   onSliderChange?: (val: number) => void;
   isDispatched?: boolean;
+  isFireDispatched?: boolean;
   obstacleMarker?: {
     id: string;
     title: string;
@@ -158,6 +159,7 @@ export default function MapContainer({
   sliderSeverity = 60,
   onSliderChange,
   isDispatched = false,
+  isFireDispatched = false,
   obstacleMarker = null,
 }: MapContainerProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
