@@ -39,14 +39,20 @@ app = FastAPI(
 # Register routers
 app.include_router(ingest_router)
 
-# CORS Security: Restrict strictly to frontend origin
+# CORS: Production configuration supporting Vercel and local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Accept"],
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+
+@app.get("/healthz", tags=["Health"], summary="Service Health Check")
+async def health_check() -> Dict[str, str]:
+    """Lightweight health check endpoint for cloud platform probes."""
+    return {"status": "healthy", "service": "MIRROR Backend API"}
 
 
 @app.exception_handler(RequestValidationError)
@@ -170,3 +176,11 @@ async def compare_simulations() -> OutcomeComparisonResult:
     the lowest-risk option based on mathematical risk scores.
     """
     return compare_all_actions()
+
+
+if __name__ == "__main__":
+    import os
+    import uvicorn
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port, reload=False)
+
