@@ -39,13 +39,19 @@ app = FastAPI(
 # Register routers
 app.include_router(ingest_router)
 
-# CORS Security: Restrict strictly to frontend origin
+# CORS Security: Allow frontend development origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+        "*",
+    ],
     allow_credentials=False,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Accept"],
+    allow_headers=["*"],
 )
 
 

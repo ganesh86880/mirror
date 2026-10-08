@@ -578,23 +578,378 @@ export default function MapContainer({
     }
   }, [obstacleMarker, mapLoaded]);
 
-  if (tokenMissing) {
-    return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-tactical-bg p-8 border border-tactical-border">
-        <AlertTriangle className="w-12 h-12 text-tactical-amber mb-3" />
-        <h3 className="text-tactical-text font-mono font-bold text-sm uppercase tracking-wider mb-1">
-          Mapbox Public Token Required
-        </h3>
-        <p className="text-tactical-muted text-xs text-center max-w-md font-mono">
-          Please paste your Mapbox Public Token into <code className="text-tactical-amber bg-tactical-panel px-1 py-0.5 rounded">/frontend/.env.local</code> as <code className="text-tactical-text bg-tactical-panel px-1 py-0.5 rounded">NEXT_PUBLIC_MAPBOX_TOKEN</code> so the 3D map can initialize.
-        </p>
-      </div>
-    );
-  }
-
   // Calculate dynamic Option A transit for slider readout
   const optATransit = Math.round(22 + (sliderSeverity - 60) * 0.4);
   const optARisk = Math.min(100, Math.round(72 + (sliderSeverity - 60) * 0.533));
+
+  if (tokenMissing) {
+    // Linear geospatial projection helper for Hyderabad viewport
+    const project = (lng: number, lat: number): [number, number] => {
+      const minLng = 78.445;
+      const maxLng = 78.515;
+      const minLat = 17.368;
+      const maxLat = 17.435;
+      const x = ((lng - minLng) / (maxLng - minLng)) * 1000;
+      const y = ((maxLat - lat) / (maxLat - minLat)) * 750;
+      return [x, y];
+    };
+
+    const toSvgPoints = (coords: number[][]): string => {
+      return coords.map(([lng, lat]) => project(lng, lat).join(",")).join(" ");
+    };
+
+    const isOptionB = selectedAction === "OPTION_B" || selectedAction === "ROUTE_3" || selectedAction === "ROUTE_C";
+    const isOptionA = selectedAction === "OPTION_A" || selectedAction === "ROUTE_A" || selectedAction === "ROUTE_1";
+    const isOptionC = selectedAction === "OPTION_C" || selectedAction === "DELAY_10" || selectedAction === "ROUTE_2";
+
+    const ambCoords = isDispatched ? project(78.4910, 17.3980) : project(78.4821, 17.3872);
+
+    return (
+      <div className="relative w-full h-full bg-[#0D1117] overflow-hidden select-none">
+        {/* Tactical 2D Geospatial Vector Canvas */}
+        <svg
+          viewBox="0 0 1000 750"
+          className="w-full h-full object-cover"
+          style={{ background: "radial-gradient(ellipse at center, #161B22 0%, #090D13 100%)" }}
+        >
+          <defs>
+            {/* Grid Pattern */}
+            <pattern id="tacticalGrid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#21262D" strokeWidth="0.8" />
+              <circle cx="0" cy="0" r="1.5" fill="#30363D" />
+            </pattern>
+            {/* Diagonal Hazard Pattern */}
+            <pattern id="hazardStripe" width="12" height="12" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+              <line x1="0" y1="0" x2="0" y2="12" stroke="#D97706" strokeWidth="3" opacity="0.4" />
+            </pattern>
+            {/* Flood Wave Pattern */}
+            <pattern id="floodWater" width="16" height="16" patternUnits="userSpaceOnUse">
+              <circle cx="8" cy="8" r="4" fill="#1D4E89" opacity="0.3" />
+            </pattern>
+            {/* Glow Filter */}
+            <filter id="glowGreen" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+            <filter id="glowAmber" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          {/* Background Coordinates Grid */}
+          <rect width="1000" height="750" fill="url(#tacticalGrid)" />
+
+          {/* Concentric Radar Rings from Hyderabad Center */}
+          <circle cx="600" cy="570" r="120" fill="none" stroke="#21262D" strokeDasharray="3,4" strokeWidth="1" />
+          <circle cx="600" cy="570" r="240" fill="none" stroke="#21262D" strokeDasharray="3,4" strokeWidth="1" />
+          <circle cx="600" cy="570" r="360" fill="none" stroke="#21262D" strokeDasharray="3,4" strokeWidth="1" />
+
+          {/* Sector 04: Active Fire Hazard Polygon */}
+          <polygon
+            points={toSvgPoints((SECTOR_04_FIRE_GEOJSON.features[0].geometry as GeoJSON.Polygon).coordinates[0])}
+            fill="#C5303025"
+            stroke="#C53030"
+            strokeWidth="1.5"
+            strokeDasharray="4,2"
+          />
+          <text
+            x={project(78.4845, 17.3910)[0]}
+            y={project(78.4845, 17.3910)[1]}
+            fill="#E05252"
+            fontSize="10"
+            fontFamily="monospace"
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            SEC 04 [FIRE HAZARD]
+          </text>
+
+          {/* Sector 07: Flood Surge Zone */}
+          <polygon
+            points={toSvgPoints((FLOOD_WATER_GEOJSON.features[0].geometry as GeoJSON.Polygon).coordinates[0])}
+            fill="#1D4E8940"
+            stroke="#388BFD"
+            strokeWidth="1.5"
+            opacity={0.5 + (sliderSeverity / 100) * 0.45}
+          />
+          <text
+            x={project(78.4755, 17.3840)[0]}
+            y={project(78.4755, 17.3840)[1]}
+            fill="#58A6FF"
+            fontSize="10"
+            fontFamily="monospace"
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            SEC 07 [FLOOD SURGE {(0.5 + (sliderSeverity / 100) * 8.0).toFixed(1)}m]
+          </text>
+
+          {/* Sector 09: Arterial Inundation / Gridlock Bottleneck */}
+          <polygon
+            points={toSvgPoints((FLOOD_WATER_GEOJSON.features[1].geometry as GeoJSON.Polygon).coordinates[0])}
+            fill="url(#hazardStripe)"
+            stroke="#D97706"
+            strokeWidth="1.8"
+            opacity={0.6 + (sliderSeverity / 100) * 0.4}
+          />
+          <text
+            x={project(78.4815, 17.4000)[0]}
+            y={project(78.4815, 17.4000)[1]}
+            fill="#F59E0B"
+            fontSize="10"
+            fontFamily="monospace"
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            SEC 09 [GRIDLOCK BOTTLENECK]
+          </text>
+
+          {/* Sector 11 Safe Corridor Indicator (Bypass Path) */}
+          <rect
+            x={project(78.4900, 17.4120)[0] - 40}
+            y={project(78.4900, 17.4120)[1] - 15}
+            width="170"
+            height="26"
+            rx="4"
+            fill="#0D281E90"
+            stroke="#2E856E"
+            strokeWidth="1"
+          />
+          <text
+            x={project(78.4900, 17.4120)[0] + 45}
+            y={project(78.4900, 17.4120)[1] + 2}
+            fill="#3FB950"
+            fontSize="10"
+            fontFamily="monospace"
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            SEC 11 // CLEAR CORRIDOR
+          </text>
+
+          {/* Navigation Route Lines */}
+          {/* Route 2 (Hold Staging) */}
+          <polyline
+            points={toSvgPoints((ROUTE_2_HOLD_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
+            fill="none"
+            stroke="#8B949E"
+            strokeWidth={isOptionC ? "4" : "2"}
+            strokeDasharray="4,4"
+            opacity={isOptionC ? 1 : 0.4}
+          />
+
+          {/* Route 1: Direct to Osmania H1 (Through bottleneck) */}
+          <polyline
+            points={toSvgPoints((ROUTE_1_DIRECT_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
+            fill="none"
+            stroke="#D97706"
+            strokeWidth={isOptionA ? "5" : "2.5"}
+            strokeDasharray={isOptionA ? "none" : "5,4"}
+            filter={isOptionA ? "url(#glowAmber)" : undefined}
+            opacity={isOptionA ? 1 : 0.45}
+          />
+
+          {/* Route 3: Sector 11 Bypass to Gandhi H2 (Recommended) */}
+          <polyline
+            points={toSvgPoints((ROUTE_3_BYPASS_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
+            fill="none"
+            stroke="#2E856E"
+            strokeWidth={isOptionB ? "5.5" : "3"}
+            filter={isOptionB ? "url(#glowGreen)" : undefined}
+            opacity={isOptionB ? 1 : 0.55}
+          />
+
+          {/* Hospital Markers */}
+          {HOSPITALS.map((hosp) => {
+            const [hx, hy] = project(hosp.coords[0], hosp.coords[1]);
+            const isH1 = hosp.id === "H1";
+            const isH2 = hosp.id === "H2";
+            const color = isH1 ? "#C53030" : isH2 ? "#2E856E" : "#58A6FF";
+
+            return (
+              <g key={hosp.id} transform={`translate(${hx}, ${hy})`}>
+                <circle r="12" fill="#161B22" stroke={color} strokeWidth="2.5" />
+                <path d="M-5 0 L5 0 M0 -5 L0 5" stroke={color} strokeWidth="2.5" />
+                {/* Hospital Badge Tag */}
+                <rect
+                  x="-70"
+                  y={isH1 ? "18" : "-36"}
+                  width="140"
+                  height="22"
+                  rx="3"
+                  fill="#11141AEE"
+                  stroke={color}
+                  strokeWidth="1"
+                />
+                <text
+                  x="0"
+                  y={isH1 ? "33" : "-22"}
+                  fill="#F0F6FC"
+                  fontSize="9.5"
+                  fontFamily="monospace"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {hosp.name} [{hosp.occupancy}%]
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Ambulance Amb-01 Unit Marker */}
+          <g transform={`translate(${ambCoords[0]}, ${ambCoords[1]})`}>
+            {/* Animated Pulse Rings */}
+            <circle r="16" fill="none" stroke="#2E856E" strokeWidth="1.5" opacity="0.6">
+              <animate attributeName="r" values="8;24;8" dur="2.4s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.4s" repeatCount="indefinite" />
+            </circle>
+            <circle r="9" fill="#2E856E" stroke="#FFFFFF" strokeWidth="2" />
+            {/* Amb-01 Badge */}
+            <rect
+              x="-65"
+              y="-32"
+              width="130"
+              height="20"
+              rx="3"
+              fill="#11141AE0"
+              stroke="#2E856E"
+              strokeWidth="1"
+            />
+            <text
+              x="0"
+              y="-18"
+              fill="#3FB950"
+              fontSize="9"
+              fontFamily="monospace"
+              fontWeight="bold"
+              textAnchor="middle"
+            >
+              {isDispatched ? "Amb-01 [EN ROUTE H2]" : "Amb-01 [TRANSIT]"}
+            </text>
+          </g>
+
+          {/* Citizen Reported Obstacle Marker (if active) */}
+          {obstacleMarker && (() => {
+            const [ox, oy] = project(obstacleMarker.coordinates[0], obstacleMarker.coordinates[1]);
+            return (
+              <g transform={`translate(${ox}, ${oy})`}>
+                <circle r="18" fill="none" stroke="#C53030" strokeWidth="2" opacity="0.8">
+                  <animate attributeName="r" values="10;26;10" dur="1.5s" repeatCount="indefinite" />
+                  <animate attributeName="opacity" values="1;0.2;1" dur="1.5s" repeatCount="indefinite" />
+                </circle>
+                <circle r="10" fill="#C53030" stroke="#FFFFFF" strokeWidth="2" />
+                <path d="M-4 3 L0 -5 L4 3 Z" fill="#FFFFFF" />
+                {/* Obstacle Label */}
+                <rect
+                  x="-85"
+                  y="16"
+                  width="170"
+                  height="22"
+                  rx="3"
+                  fill="#11141AE0"
+                  stroke="#C53030"
+                  strokeWidth="1"
+                />
+                <text
+                  x="0"
+                  y="31"
+                  fill="#FF7B72"
+                  fontSize="9"
+                  fontFamily="monospace"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  OBSTACLE: {obstacleMarker.title || "MG ROAD"}
+                </text>
+              </g>
+            );
+          })()}
+
+          {/* Map Compass Rose */}
+          <g transform="translate(45, 690)">
+            <circle r="22" fill="#161B22CC" stroke="#30363D" strokeWidth="1" />
+            <path d="M0 -16 L4 -4 L0 0 L-4 -4 Z" fill="#2E856E" />
+            <path d="M0 16 L4 4 L0 0 L-4 4 Z" fill="#8B949E" />
+            <text x="0" y="-18" fill="#F0F6FC" fontSize="8" fontFamily="monospace" fontWeight="bold" textAnchor="middle">N</text>
+            <text x="0" y="27" fill="#8B949E" fontSize="7" fontFamily="monospace" textAnchor="middle">HYDERABAD</text>
+          </g>
+        </svg>
+
+        {/* Top Mode Pill Banner */}
+        <div className="absolute top-3 left-3 z-10 flex items-center gap-2 bg-[#161B22]/95 backdrop-blur border border-[#30363D] px-2.5 py-1 rounded font-mono text-[10px] text-tactical-muted">
+          <span className="w-2 h-2 rounded-full bg-tactical-green animate-pulse" />
+          <span className="text-tactical-text font-bold">TACTICAL 2D TWIN VIEW</span>
+          <span className="text-[#30363D]">|</span>
+          <span className="text-[9px]">3D Photogrammetry available with NEXT_PUBLIC_MAPBOX_TOKEN in .env.local</span>
+        </div>
+
+        {/* Floating Tactical "What-If" Junction Congestion / Flood Slider */}
+        <div className="absolute top-3 right-3 z-10 w-72 bg-[#161B22]/95 backdrop-blur border border-[#30363D] p-3 rounded font-mono text-[11px] shadow-lg select-none">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="flex items-center gap-1.5 text-tactical-text font-bold text-[11px]">
+              <Sliders className="w-3.5 h-3.5 text-tactical-amber" />
+              <span>WHAT-IF SIMULATOR</span>
+            </div>
+            <span
+              className="px-1.5 py-0.2 rounded text-[9px] font-bold border"
+              style={{
+                backgroundColor: sliderSeverity > 75 ? "#C5303020" : sliderSeverity > 40 ? "#D9770620" : "#2E856E20",
+                borderColor: sliderSeverity > 75 ? "#C5303050" : sliderSeverity > 40 ? "#D9770650" : "#2E856E50",
+                color: sliderSeverity > 75 ? "#C53030" : sliderSeverity > 40 ? "#D97706" : "#2E856E",
+              }}
+            >
+              {sliderSeverity}% {sliderSeverity > 75 ? "CRITICAL" : sliderSeverity > 40 ? "CONGESTED" : "CLEAR"}
+            </span>
+          </div>
+
+          <div className="text-[10px] text-tactical-muted mb-2">
+            Sector 09 Gridlock / Flood Severity
+          </div>
+
+          {/* Tactical Range Slider */}
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={sliderSeverity}
+            onChange={(e) => {
+              const val = Number(e.target.value);
+              onSliderChange?.(val);
+            }}
+            className="w-full h-1.5 bg-tactical-bg rounded-lg appearance-none cursor-pointer accent-tactical-amber mb-2.5"
+          />
+
+          {/* Real-time Dynamic Impact Readout */}
+          <div className="space-y-1 text-[10px] p-2 bg-tactical-bg rounded border border-tactical-border">
+            <div className="flex justify-between items-center text-tactical-muted">
+              <span>Flood / Congestion Depth:</span>
+              <span className="text-tactical-text font-bold">{((sliderSeverity / 100) * 8.5).toFixed(1)}m</span>
+            </div>
+            <div className="flex justify-between items-center text-tactical-muted">
+              <span>Option A Transit Delay:</span>
+              <span className={sliderSeverity >= 80 ? "text-tactical-crimson font-bold" : "text-tactical-amber font-bold"}>
+                {optATransit}m (Risk: {optARisk})
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-tactical-muted pt-1 border-t border-tactical-border">
+              <span>Option B Bypass:</span>
+              <span className="text-tactical-green font-bold flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" />
+                13m (Risk: 34) UNCHANGED
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative w-full h-full">

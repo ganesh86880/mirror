@@ -40,12 +40,18 @@ export default function RightPanel({
     let isCancelled = false;
     setLoading(true);
 
-    simulateAction(selectedAction, sliderSeverity).then((res) => {
-      if (!isCancelled) {
-        setSimulationResult(res);
-        setLoading(false);
-      }
-    });
+    simulateAction(selectedAction, sliderSeverity)
+      .then((res) => {
+        if (!isCancelled) {
+          setSimulationResult(res);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setLoading(false);
+        }
+      });
 
     return () => {
       isCancelled = true;
@@ -269,20 +275,38 @@ export default function RightPanel({
           </div>
         </div>
 
-        {/* AI RATIONALE CARD */}
+        {/* CONSEQUENCE RATIONALE — powered by live backend simulation */}
         <div className="p-3 bg-tactical-surface border border-tactical-border rounded space-y-2 font-mono">
           <div className="flex items-center justify-between">
             <span className="text-[10px] text-tactical-muted uppercase font-bold flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-tactical-amber" />
               CONSEQUENCE RATIONALE
             </span>
-            <span className="text-[10px] font-bold text-tactical-text">
-              {isOptionB ? "ROUTE 3 // BYPASS" : isOptionA ? "ROUTE 1 // DIRECT" : "HOLD // DELAY"}
-            </span>
+            <div className="flex items-center gap-1.5">
+              {simulationResult && (
+                <span
+                  className="text-[10px] font-bold px-1.5 py-0.5 rounded border"
+                  style={{
+                    color: simulationResult.projected_risk > 70 ? "#C53030" : simulationResult.projected_risk < 45 ? "#2E856E" : "#D97706",
+                    backgroundColor: simulationResult.projected_risk > 70 ? "#C5303015" : simulationResult.projected_risk < 45 ? "#2E856E15" : "#D9770615",
+                    borderColor: simulationResult.projected_risk > 70 ? "#C5303040" : simulationResult.projected_risk < 45 ? "#2E856E40" : "#D9770640",
+                  }}
+                >
+                  RISK: {simulationResult.projected_risk.toFixed(0)} ({simulationResult.risk_difference >= 0 ? "+" : ""}{simulationResult.risk_difference.toFixed(0)})
+                </span>
+              )}
+              <span className="text-[10px] font-bold text-tactical-text">
+                {isOptionB ? "ROUTE 3 // BYPASS" : isOptionA ? "ROUTE 1 // DIRECT" : "HOLD // DELAY"}
+              </span>
+            </div>
           </div>
 
           <div className="text-[11px] leading-relaxed text-tactical-text p-2 bg-tactical-bg rounded border border-tactical-border">
-            {isOptionB ? (
+            {simulationResult?.explanation ? (
+              <span className={isOptionB ? "text-[#F0F6FC]" : "text-tactical-muted"}>
+                &ldquo;{simulationResult.explanation}&rdquo;
+              </span>
+            ) : isOptionB ? (
               <span className="text-[#F0F6FC]">
                 &ldquo;Bypasses Sector 09 gridlock and routes to Hospital H2, preventing critical saturation at Hospital H1.&rdquo;
               </span>
