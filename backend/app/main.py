@@ -10,6 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.routers.ingest import router as ingest_router
 from app.schemas.simulation import (
     ActionId,
     OutcomeComparisonResult,
@@ -34,6 +35,9 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Register routers
+app.include_router(ingest_router)
 
 # CORS Security: Restrict strictly to frontend origin
 app.add_middleware(

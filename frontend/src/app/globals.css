@@ -1,0 +1,53 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'mapbox-gl/dist/mapbox-gl.css';
+
+:root {
+  --bg-dark: #11141A;
+  --bg-surface: #161B22;
+  --panel-bg: #1C2128;
+  --border-color: #30363D;
+  --text-main: #F0F6FC;
+  --crimson: #C53030;
+  --amber: #D97706;
+  --green: #2E856E;
+  --flood: #1D4E89;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+  user-select: none;
+}
+
+/* Custom Scrollbar for dense tactical lists */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: #11141A;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #30363D;
+  border-radius: 2px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #484F58;
+}
+
+/* Mapbox canvas styling */
+.mapboxgl-canvas {
+  outline: none;
+}
