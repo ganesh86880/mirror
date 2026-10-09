@@ -11,7 +11,8 @@ interface TacticalLifecycleBannerProps {
   userRole: UserRole;
   lifecycleState: ResponderLifecycleState;
   triageText?: string;
-  onAcceptAndNavigate: () => void;
+  isDualDispatch?: boolean;
+  onAcceptAndNavigate: (isDual?: boolean) => void;
   onArrivedAtScene: () => void;
   onCaseResolved: () => void;
   onDismiss: () => void;
@@ -22,6 +23,7 @@ export default function TacticalLifecycleBanner({
   userRole,
   lifecycleState,
   triageText,
+  isDualDispatch = false,
   onAcceptAndNavigate,
   onArrivedAtScene,
   onCaseResolved,
@@ -57,7 +59,9 @@ export default function TacticalLifecycleBanner({
               <span className="text-[10px] text-gray-400 block">
                 STATUS: {activeIncident.status} • RADIUS: {activeIncident.radius_meters}m
                 {isNavigating && (
-                  <span className="text-[#2E856E] font-semibold ml-1.5">• NAVIGATING (ROUTE LOCKED)</span>
+                  <span className="text-[#2E856E] font-semibold ml-1.5">
+                    • {isDualDispatch ? "DUAL FLEET IN MOTION (🚒+🚑)" : "NAVIGATING (ROUTE LOCKED)"}
+                  </span>
                 )}
                 {isAtScene && (
                   <span className="text-amber-400 font-semibold ml-1.5">
@@ -90,16 +94,23 @@ export default function TacticalLifecycleBanner({
 
         {/* 3-Stage Responder Action Workflow */}
         <div className="pt-1">
-          {/* STAGE 1: UNACCEPTED -> [ ACCEPT & NAVIGATE ] */}
+          {/* STAGE 1: UNACCEPTED -> Dual Dispatch & Single Unit */}
           {isUnaccepted && (
-            <button
-              onClick={onAcceptAndNavigate}
-              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-[#2E856E] bg-[#2E856E] hover:bg-[#256f5c] active:scale-[0.98] text-white text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#2E856E]/30 transition-all"
-            >
-              <Navigation className="w-4 h-4 animate-bounce" />
-              <span>[ ACCEPT &amp; NAVIGATE ]</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={() => onAcceptAndNavigate(true)}
+                className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-red-500 bg-red-600 hover:bg-red-500 active:scale-[0.98] text-white text-[11px] font-bold tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-red-600/30 transition-all"
+              >
+                <span>🚒 + 🚑 SEND BOTH TO SCENE</span>
+              </button>
+              <button
+                onClick={() => onAcceptAndNavigate(false)}
+                className="w-full min-h-[44px] px-3 py-2.5 rounded-xl border border-[#2E856E] bg-[#2E856E] hover:bg-[#256f5c] active:scale-[0.98] text-white text-[11px] font-bold tracking-wider flex items-center justify-center gap-1.5 shadow-lg shadow-[#2E856E]/30 transition-all"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                <span>DISPATCH {userRole.replace("_", " ")}</span>
+              </button>
+            </div>
           )}
 
           {/* STAGE 2: NAVIGATING -> [ ARRIVED AT SCENE ] */}
@@ -113,14 +124,14 @@ export default function TacticalLifecycleBanner({
             </button>
           )}
 
-          {/* STAGE 3: AT_SCENE -> [ CASE RESOLVED ] */}
+          {/* STAGE 3: AT_SCENE -> [ SOLVE & CLEAR HAZARD FROM MAP ] */}
           {isAtScene && (
             <button
               onClick={onCaseResolved}
-              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-[#2E856E] bg-[#2E856E] hover:bg-[#256f5c] active:scale-[0.98] text-white text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#2E856E]/30 transition-all"
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-emerald-500 bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>[ CASE RESOLVED ]</span>
+              <span>[ SOLVE &amp; CLEAR HAZARD FROM MAP ]</span>
             </button>
           )}
 

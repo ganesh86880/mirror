@@ -66,6 +66,7 @@ interface LeafletMapContainerProps {
   isHotspotMode?: boolean;
   activeIncidentTarget?: HazardIncident | null;
   lifecycleState?: string;
+  isDualDispatch?: boolean;
   isGridSimulationActive?: boolean;
   onMapClick?: (coords: [number, number]) => void;
   onSelectIncident?: (incident: HazardIncident) => void;
@@ -81,6 +82,7 @@ export default function LeafletMapContainer({
   isHotspotMode = false,
   activeIncidentTarget = null,
   lifecycleState = "UNACCEPTED",
+  isDualDispatch = false,
   isGridSimulationActive = false,
   onMapClick,
   onSelectIncident,
@@ -218,7 +220,10 @@ export default function LeafletMapContainer({
       allIncidents.unshift(activeIncidentTarget);
     }
 
-    allIncidents.forEach((inc) => {
+    // Completely filter out resolved hazards so solved incidents vanish from map
+    const activeIncidents = allIncidents.filter((inc) => inc.status !== "RESOLVED");
+
+    activeIncidents.forEach((inc) => {
       const lat = inc.lat || 17.396;
       const lng = inc.lng || 78.466;
       const effectiveRadius = inc.status === "CONTAINED" ? Math.round(inc.radius_meters * 0.5) : inc.radius_meters;
@@ -465,7 +470,35 @@ export default function LeafletMapContainer({
       lineJoin: "round",
     });
     group.addLayer(singleActiveLine);
-  }, [activeIncidentTarget, currentUser, mapLoaded, lifecycleState, selectedAction]);
+
+    // If Dual Dispatch active, simultaneously display partner unit route leading to the scene
+    if (isDualDispatch) {
+      const partnerRole = currentUser.role === "FIRE_ENGINE" ? "AMBULANCE" : "FIRE_ENGINE";
+      const partner = activeUsers.find((u) => u.role === partnerRole);
+      if (partner) {
+        const pPos: [number, number] = [partner.lat, partner.lng];
+        const pMid1Lat = pPos[0] + (hazardPos[0] - pPos[0]) * 0.33;
+        const pMid1Lng = pPos[1] + (hazardPos[1] - pPos[1]) * 0.33;
+        const pMid2Lat = pPos[0] + (hazardPos[0] - pPos[0]) * 0.66;
+        const pMid2Lng = pPos[1] + (hazardPos[1] - pPos[1]) * 0.66;
+        const partnerNavPath: [number, number][] = [
+          pPos,
+          [pMid1Lat, pMid1Lng],
+          [pMid2Lat, pMid2Lng],
+          hazardPos,
+        ];
+        const partnerLine = L.polyline(partnerNavPath, {
+          color: partnerRole === "FIRE_ENGINE" ? "#DC2626" : "#10B981",
+          weight: 4.5,
+          opacity: 0.9,
+          dashArray: "6, 6",
+          lineCap: "round",
+          lineJoin: "round",
+        });
+        group.addLayer(partnerLine);
+      }
+    }
+  }, [activeIncidentTarget, currentUser, activeUsers, isDualDispatch, mapLoaded, lifecycleState, selectedAction]);
 
   // 7b. Smoothly fly/pan to Active Incident Target whenever created or selected
   useEffect(() => {

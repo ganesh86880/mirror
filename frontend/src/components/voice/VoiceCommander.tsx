@@ -18,6 +18,7 @@ export interface VoiceHazardPayload {
 export type VoiceActionType =
   | "NAVIGATE_MOVE"
   | "NAVIGATE_STOP"
+  | "DUAL_DISPATCH"
   | "ARRIVED_SCENE"
   | "RESOLVE_INCIDENT"
   | "SWITCH_ROLE"
@@ -161,6 +162,15 @@ export default function VoiceCommander({
 
 
       if (
+        lower.includes("send both") ||
+        lower.includes("dispatch both") ||
+        lower.includes("dual dispatch") ||
+        lower.includes("both units") ||
+        (lower.includes("ambulance") && (lower.includes("fire") || lower.includes("truck")))
+      ) {
+        action = "DUAL_DISPATCH";
+        feedback = "Dual fleet dispatched: Fire Engine and Ambulance en route simultaneously to incident scene.";
+      } else if (
         lower.includes("move") ||
         lower.includes("go") ||
         lower.includes("navigate") ||
@@ -498,6 +508,13 @@ export default function VoiceCommander({
                 className="px-2 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/40 text-[9px] text-emerald-300 font-bold active:scale-95 transition-all"
               >
                 🚀 Move to Scene
+              </button>
+              <button
+                type="button"
+                onClick={() => processCommand("Send ambulance and fire truck")}
+                className="px-2 py-0.5 rounded-full bg-red-600/30 hover:bg-red-600/50 border border-red-500/50 text-[9px] text-red-200 font-bold active:scale-95 transition-all"
+              >
+                🚒+🚑 Send Both
               </button>
             </div>
           </div>

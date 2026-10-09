@@ -551,9 +551,23 @@ function saveLocalIncident(incident: HazardIncident): void {
   } catch {}
 }
 
+export function deleteLocalIncident(id: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const existing = getLocalIncidents();
+    const updated = existing.filter((i) => i.id !== id);
+    localStorage.setItem(LOCAL_STORAGE_INCIDENTS_KEY, JSON.stringify(updated));
+    localStorage.setItem("mirror_cached_incidents", JSON.stringify(updated));
+  } catch {}
+}
+
 function updateLocalIncidentStatus(id: string, status: IncidentStatus): HazardIncident | null {
   if (typeof window === "undefined") return null;
   try {
+    if (status === "RESOLVED") {
+      deleteLocalIncident(id);
+      return null;
+    }
     const existing = getLocalIncidents();
     const target = existing.find((i) => i.id === id);
     if (target) {
@@ -613,11 +627,12 @@ export async function getIncidents(status?: string): Promise<HazardIncident[]> {
         const local = getLocalIncidents();
         const backendIds = new Set(data.map((d) => d.id));
         const merged = [...data, ...local.filter((l) => !backendIds.has(l.id))];
+        const activeOnly = merged.filter((i) => i.status !== "RESOLVED");
         if (typeof window !== "undefined") {
-          localStorage.setItem(LOCAL_STORAGE_INCIDENTS_KEY, JSON.stringify(merged));
-          localStorage.setItem("mirror_cached_incidents", JSON.stringify(merged));
+          localStorage.setItem(LOCAL_STORAGE_INCIDENTS_KEY, JSON.stringify(activeOnly));
+          localStorage.setItem("mirror_cached_incidents", JSON.stringify(activeOnly));
         }
-        return merged.length > 0 ? merged : DEFAULT_BASELINE_INCIDENTS;
+        return activeOnly.length > 0 ? activeOnly : DEFAULT_BASELINE_INCIDENTS;
       }
     }
   } catch (err) {
@@ -625,7 +640,7 @@ export async function getIncidents(status?: string): Promise<HazardIncident[]> {
   }
 
   // Resilient fallback: return localStorage incidents or default baselines
-  const local = getLocalIncidents();
+  const local = getLocalIncidents().filter((i) => i.status !== "RESOLVED");
   if (local.length > 0) {
     return status ? local.filter((i) => i.status === status) : local;
   }

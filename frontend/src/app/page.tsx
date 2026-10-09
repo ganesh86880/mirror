@@ -16,6 +16,7 @@ import {
   UserProfile,
   UserRole,
   createCustomIncident,
+  deleteLocalIncident,
   getActiveUsers,
   getDynamicHospitals,
   getHospitalTriageRecommendation,
@@ -66,6 +67,7 @@ export default function MissionControlDashboard() {
   const [isGridSimulationActive, setIsGridSimulationActive] = useState<boolean>(false);
   const [lifecycleState, setLifecycleState] = useState<ResponderLifecycleState>("UNACCEPTED");
   const [isDriving, setIsDriving] = useState<boolean>(false);
+  const [isDualDispatch, setIsDualDispatch] = useState<boolean>(false);
 
   // 3. UI Interactive Overlays State
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
@@ -198,8 +200,9 @@ export default function MissionControlDashboard() {
   };
 
   // 9. Accept & Navigate Workflow Transition (Phase 3 & 4)
-  const handleAcceptAndNavigate = async () => {
+  const handleAcceptAndNavigate = async (dual: boolean = false) => {
     if (!activeIncidentTarget) return;
+    setIsDualDispatch(dual);
     setLifecycleState("NAVIGATING");
     setIsDriving(true);
     // Lock bypass corridor (Route 3 / Option B in #2E856E)
@@ -221,9 +224,9 @@ export default function MissionControlDashboard() {
     if (!activeIncidentTarget) return;
     setLifecycleState("AT_SCENE");
 
-    if (currentUser.role === "FIRE_ENGINE") {
-      // Fire Engine: transition incident to CONTAINED (shrinks red zone by 50% and turns orange)
-      const updated = await updateIncidentStatus(activeIncidentTarget.id, "CONTAINED");
+    if (currentUser.role === "FIRE_ENGINE" || isDualDispatch) {
+      // Fire Engine or Dual Dispatch: transition incident to CONTAINED (shrinks red zone by 50% and turns orange)
+      await updateIncidentStatus(activeIncidentTarget.id, "CONTAINED");
       const containedIncident = {
         ...activeIncidentTarget,
         status: "CONTAINED" as const,
@@ -235,9 +238,9 @@ export default function MissionControlDashboard() {
         prev.map((i) => (i.id === activeIncidentTarget.id ? containedIncident : i))
       );
     } else {
-      // Ambulance: switches navigation target to Hospital H2 (Gandhi) via bypass
+      // Ambulance solo: switches navigation target to Hospital H2 (Gandhi) via bypass
       setSelectedAction("OPTION_B");
-      const updated = await updateIncidentStatus(activeIncidentTarget.id, "RESPONDING");
+      await updateIncidentStatus(activeIncidentTarget.id, "RESPONDING");
       const respondingIncident = {
         ...activeIncidentTarget,
         status: "RESPONDING" as const,
@@ -250,22 +253,21 @@ export default function MissionControlDashboard() {
     }
   };
 
-  // 11. Arrival Lifecycle: Case Resolved Transition
+  // 11. Arrival Lifecycle: Case Resolved Transition -> Completely REMOVE hazard
   const handleCaseResolved = async () => {
     if (!activeIncidentTarget) return;
+    const targetId = activeIncidentTarget.id;
     setLifecycleState("RESOLVED");
 
-    const updated = await updateIncidentStatus(activeIncidentTarget.id, "RESOLVED");
-    const resolvedIncident = {
-      ...activeIncidentTarget,
-      status: "RESOLVED" as const,
-      severity: "SAFE" as const,
-    };
-    setIncidents((prev) =>
-      prev.map((i) => (i.id === activeIncidentTarget.id ? resolvedIncident : i))
-    );
-    setActiveIncidentTarget(resolvedIncident);
+    await updateIncidentStatus(targetId, "RESOLVED");
+    deleteLocalIncident(targetId);
+
+    // Remove resolved hazard completely from state so it disappears from map & lists
+    setIncidents((prev) => prev.filter((i) => i.id !== targetId));
+    setActiveIncidentTarget(null);
+    setLifecycleState("UNACCEPTED");
     setIsDriving(false);
+    setIsDualDispatch(false);
 
     // Reset vehicle status to Available
     setCurrentUser((prev) => ({
@@ -284,7 +286,7 @@ export default function MissionControlDashboard() {
     const destLat = activeIncidentTarget.lat || 17.396;
     const destLng = activeIncidentTarget.lng || 78.466;
 
-    // Dynamic tactical corridor waypoints connecting start to destination
+    // Primary vehicle tactical corridor waypoints
     const mid1Lat = startLat + (destLat - startLat) * 0.33 + 0.002;
     const mid1Lng = startLng + (destLng - startLng) * 0.33 - 0.002;
     const mid2Lat = startLat + (destLat - startLat) * 0.66 - 0.001;
@@ -311,6 +313,35 @@ export default function MissionControlDashboard() {
       }
     }
 
+    // Partner vehicle dense steps for dual dispatch (Ambulance + Fire Engine moving at the same time)
+    const partnerRole = currentUser.role === "FIRE_ENGINE" ? "AMBULANCE" : "FIRE_ENGINE";
+    const partnerObj = activeUsers.find((u) => u.role === partnerRole);
+    const partnerStartLat = partnerObj?.lat || (currentUser.role === "FIRE_ENGINE" ? 17.3872 : 17.389);
+    const partnerStartLng = partnerObj?.lng || (currentUser.role === "FIRE_ENGINE" ? 78.4821 : 78.476);
+    const pMid1Lat = partnerStartLat + (destLat - partnerStartLat) * 0.33 - 0.001;
+    const pMid1Lng = partnerStartLng + (destLng - partnerStartLng) * 0.33 + 0.002;
+    const pMid2Lat = partnerStartLat + (destLat - partnerStartLat) * 0.66 + 0.001;
+    const pMid2Lng = partnerStartLng + (destLng - partnerStartLng) * 0.66 - 0.001;
+    const partnerWaypoints: [number, number][] = [
+      [partnerStartLat, partnerStartLng],
+      [pMid1Lat, pMid1Lng],
+      [pMid2Lat, pMid2Lng],
+      [destLat, destLng],
+    ];
+    const partnerSteps: [number, number][] = [];
+    for (let i = 0; i < partnerWaypoints.length - 1; i++) {
+      const p1 = partnerWaypoints[i];
+      const p2 = partnerWaypoints[i + 1];
+      const segments = 8;
+      for (let s = 0; s <= segments; s++) {
+        const factor = s / segments;
+        partnerSteps.push([
+          p1[0] + (p2[0] - p1[0]) * factor,
+          p1[1] + (p2[1] - p1[1]) * factor,
+        ]);
+      }
+    }
+
     let stepIndex = 0;
     const driveInterval = setInterval(() => {
       stepIndex++;
@@ -322,6 +353,14 @@ export default function MissionControlDashboard() {
           lng: nextLng,
         }));
         updateUserLocation(nextLat, nextLng, undefined, currentUser.id).catch(() => {});
+
+        // Simultaneously animate partner vehicle during dual dispatch
+        if (isDualDispatch && stepIndex < partnerSteps.length) {
+          const [pLat, pLng] = partnerSteps[stepIndex];
+          setActiveUsers((prev) =>
+            prev.map((u) => (u.role === partnerRole ? { ...u, lat: pLat, lng: pLng } : u))
+          );
+        }
       } else {
         // Reached destination!
         clearInterval(driveInterval);
@@ -331,7 +370,7 @@ export default function MissionControlDashboard() {
     }, 400);
 
     return () => clearInterval(driveInterval);
-  }, [isDriving, lifecycleState, activeIncidentTarget]);
+  }, [isDriving, lifecycleState, activeIncidentTarget, isDualDispatch]);
 
   // 13. Voice Command Intent Dispatcher
   const handleVoiceCommand = (
@@ -369,11 +408,16 @@ export default function MissionControlDashboard() {
           target = incidents.find((i) => i.status !== "RESOLVED") || incidents[0];
           setActiveIncidentTarget(target);
         }
-        setLifecycleState("NAVIGATING");
-        setIsDriving(true);
-        if (target) {
-          updateIncidentStatus(target.id, "RESPONDING").catch(() => {});
+        handleAcceptAndNavigate(false);
+        break;
+      }
+      case "DUAL_DISPATCH": {
+        let target = activeIncidentTarget;
+        if (!target && incidents.length > 0) {
+          target = incidents.find((i) => i.status !== "RESOLVED") || incidents[0];
+          setActiveIncidentTarget(target);
         }
+        handleAcceptAndNavigate(true);
         break;
       }
       case "NAVIGATE_STOP": {
@@ -427,6 +471,7 @@ export default function MissionControlDashboard() {
         isHotspotMode={isHotspotMode}
         activeIncidentTarget={activeIncidentTarget}
         lifecycleState={lifecycleState}
+        isDualDispatch={isDualDispatch}
         isGridSimulationActive={isGridSimulationActive}
         onMapClick={handleMapClick}
         onSelectIncident={handleSelectIncident}
@@ -472,9 +517,14 @@ export default function MissionControlDashboard() {
         }}
         onResolveIncident={(incId) => {
           updateIncidentStatus(incId, "RESOLVED");
-          setIncidents((prev) =>
-            prev.map((i) => (i.id === incId ? { ...i, status: "RESOLVED" } : i))
-          );
+          deleteLocalIncident(incId);
+          setIncidents((prev) => prev.filter((i) => i.id !== incId));
+          if (activeIncidentTarget?.id === incId) {
+            setActiveIncidentTarget(null);
+            setLifecycleState("UNACCEPTED");
+            setIsDriving(false);
+            setIsDualDispatch(false);
+          }
         }}
         selectedAction={selectedAction}
         onSelectAction={setSelectedAction}
@@ -491,12 +541,14 @@ export default function MissionControlDashboard() {
           userRole={currentUser.role}
           lifecycleState={lifecycleState}
           triageText={triageInfo?.recommendationText}
+          isDualDispatch={isDualDispatch}
           onAcceptAndNavigate={handleAcceptAndNavigate}
           onArrivedAtScene={handleArrivedAtScene}
           onCaseResolved={handleCaseResolved}
           onDismiss={() => {
             setActiveIncidentTarget(null);
             setLifecycleState("UNACCEPTED");
+            setIsDualDispatch(false);
           }}
         />
       )}
