@@ -765,13 +765,19 @@ export default function MapContainer({
             SEC 07 [FLOOD SURGE {(0.5 + (sliderSeverity / 100) * 8.0).toFixed(1)}m]
           </text>
 
-          {/* Sector 09: Arterial Inundation / Gridlock Bottleneck */}
+          {/* Sector 09: Arterial Inundation / Gridlock Bottleneck — always orange */}
+          <polygon
+            points={toSvgPoints((FLOOD_WATER_GEOJSON.features[1].geometry as GeoJSON.Polygon).coordinates[0])}
+            fill="#D9770630"
+            stroke="#D97706"
+            strokeWidth="2"
+            opacity="1"
+          />
           <polygon
             points={toSvgPoints((FLOOD_WATER_GEOJSON.features[1].geometry as GeoJSON.Polygon).coordinates[0])}
             fill="url(#hazardStripe)"
-            stroke="#D97706"
-            strokeWidth="1.8"
-            opacity={0.6 + (sliderSeverity / 100) * 0.4}
+            stroke="none"
+            opacity="0.7"
           />
           <text
             x={project(78.4815, 17.4000)[0]}
@@ -808,37 +814,107 @@ export default function MapContainer({
             SEC 11 // CLEAR CORRIDOR
           </text>
 
-          {/* Navigation Route Lines */}
-          {/* Route 2 (Hold Staging) */}
-          <polyline
-            points={toSvgPoints((ROUTE_2_HOLD_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
-            fill="none"
-            stroke="#8B949E"
-            strokeWidth={isOptionC ? "5" : "1.5"}
-            strokeDasharray="4,4"
-            opacity={isOptionC ? 1 : 0.25}
-          />
+          {/* Navigation Route Lines — all always visible, selected route highlighted */}
 
-          {/* Route 1: Direct to Osmania H1 (Through bottleneck) */}
+          {/* Route 1: Direct to Osmania H1 (amber — Option A) */}
+          {/* Background casing when selected */}
+          {isOptionA && (
+            <polyline
+              points={toSvgPoints((ROUTE_1_DIRECT_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
+              fill="none"
+              stroke="#D97706"
+              strokeWidth="12"
+              strokeLinecap="round"
+              opacity="0.18"
+            />
+          )}
           <polyline
             points={toSvgPoints((ROUTE_1_DIRECT_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
             fill="none"
             stroke="#D97706"
-            strokeWidth={isOptionA ? "6" : "1.5"}
-            strokeDasharray={isOptionA ? "none" : "5,4"}
+            strokeWidth={isOptionA ? "7" : "2.5"}
+            strokeLinecap="round"
             filter={isOptionA ? "url(#glowAmber)" : undefined}
-            opacity={isOptionA ? 1 : 0.25}
+            opacity={isOptionA ? 1 : 0.6}
           />
+          {/* Route 1 label */}
+          <text
+            x={project(78.4780, 17.3830)[0]}
+            y={project(78.4780, 17.3830)[1] - 10}
+            fill={isOptionA ? "#F59E0B" : "#8B6A20"}
+            fontSize={isOptionA ? "10" : "8"}
+            fontFamily="monospace"
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {isOptionA ? "▶ ROUTE-1 [ACTIVE]" : "ROUTE-1"}
+          </text>
 
-          {/* Route 3: Sector 11 Bypass to Gandhi H2 (Recommended) */}
+          {/* Route 3: Sector 11 Bypass to Gandhi H2 (green — Option B) */}
+          {isOptionB && (
+            <polyline
+              points={toSvgPoints((ROUTE_3_BYPASS_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
+              fill="none"
+              stroke="#2E856E"
+              strokeWidth="12"
+              strokeLinecap="round"
+              opacity="0.18"
+            />
+          )}
           <polyline
             points={toSvgPoints((ROUTE_3_BYPASS_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
             fill="none"
             stroke="#2E856E"
-            strokeWidth={isOptionB ? "6" : "1.5"}
+            strokeWidth={isOptionB ? "7" : "2.5"}
+            strokeLinecap="round"
             filter={isOptionB ? "url(#glowGreen)" : undefined}
-            opacity={isOptionB ? 1 : 0.25}
+            opacity={isOptionB ? 1 : 0.6}
           />
+          {/* Route 3 label */}
+          <text
+            x={project(78.4960, 17.4080)[0]}
+            y={project(78.4960, 17.4080)[1] - 10}
+            fill={isOptionB ? "#3FB950" : "#1C5235"}
+            fontSize={isOptionB ? "10" : "8"}
+            fontFamily="monospace"
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {isOptionB ? "▶ ROUTE-3 [ACTIVE]" : "ROUTE-3"}
+          </text>
+
+          {/* Route 2: Hold Staging (grey — Option C) */}
+          {isOptionC && (
+            <polyline
+              points={toSvgPoints((ROUTE_2_HOLD_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
+              fill="none"
+              stroke="#8B949E"
+              strokeWidth="12"
+              strokeLinecap="round"
+              opacity="0.18"
+            />
+          )}
+          <polyline
+            points={toSvgPoints((ROUTE_2_HOLD_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
+            fill="none"
+            stroke="#8B949E"
+            strokeWidth={isOptionC ? "7" : "2.5"}
+            strokeLinecap="round"
+            strokeDasharray="6,4"
+            opacity={isOptionC ? 1 : 0.6}
+          />
+          {/* Route 2 label */}
+          <text
+            x={project(78.4828, 17.3881)[0] + 50}
+            y={project(78.4828, 17.3881)[1]}
+            fill={isOptionC ? "#C0C8D2" : "#555E66"}
+            fontSize={isOptionC ? "10" : "8"}
+            fontFamily="monospace"
+            fontWeight="bold"
+            textAnchor="middle"
+          >
+            {isOptionC ? "▶ HOLD [ACTIVE]" : "HOLD"}
+          </text>
 
           {/* Hospital Markers */}
           {HOSPITALS.map((hosp) => {
