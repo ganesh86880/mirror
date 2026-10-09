@@ -284,11 +284,15 @@ export default function MissionControlDashboard() {
     const destLat = activeIncidentTarget.lat || 17.396;
     const destLng = activeIncidentTarget.lng || 78.466;
 
-    // Tactical bypass waypoints
+    // Dynamic tactical corridor waypoints connecting start to destination
+    const mid1Lat = startLat + (destLat - startLat) * 0.33 + 0.002;
+    const mid1Lng = startLng + (destLng - startLng) * 0.33 - 0.002;
+    const mid2Lat = startLat + (destLat - startLat) * 0.66 - 0.001;
+    const mid2Lng = startLng + (destLng - startLng) * 0.66 + 0.002;
     const routeWaypoints: [number, number][] = [
       [startLat, startLng],
-      [17.393, 78.458],
-      [17.395, 78.462],
+      [mid1Lat, mid1Lng],
+      [mid2Lat, mid2Lng],
       [destLat, destLng],
     ];
 
@@ -338,10 +342,23 @@ export default function MissionControlDashboard() {
     switch (actionType) {
       case "CREATE_HAZARD": {
         if (hazardPayload) {
-          createCustomIncident(hazardPayload).then((res) => {
-            if (res && res.incident) {
-              handleIncidentCreated(res.incident);
-            }
+          const optimisticIncident: HazardIncident = {
+            id: `inc_voice_${Date.now()}`,
+            title: hazardPayload.title,
+            incident_type: hazardPayload.incident_type,
+            severity: hazardPayload.severity,
+            lat: hazardPayload.lat,
+            lng: hazardPayload.lng,
+            radius_meters: hazardPayload.radius_meters || 250,
+            status: "ACTIVE",
+            description: hazardPayload.description || hazardPayload.title,
+            created_at: new Date().toISOString(),
+          };
+          // 0ms instant optimistic placement & focus
+          handleIncidentCreated(optimisticIncident);
+          // Persist to background API / local cache asynchronously
+          createCustomIncident(hazardPayload).catch((err) => {
+            console.warn("Background incident sync error (safely ignored, optimistic active):", err);
           });
         }
         break;

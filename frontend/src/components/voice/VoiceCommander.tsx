@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Mic, MicOff, Volume2, Radio, Check, AlertCircle } from "lucide-react";
 import { UserRole } from "@/lib/api";
+import { resolveHyderabadLocation } from "@/lib/locations";
 
 export interface VoiceHazardPayload {
   title: string;
@@ -76,7 +77,7 @@ export default function VoiceCommander({
       lastExecutedTextRef.current = lower;
       setTimeout(() => {
         lastExecutedTextRef.current = "";
-      }, 2500);
+      }, 900);
 
       setTranscript(lower);
 
@@ -106,18 +107,12 @@ export default function VoiceCommander({
       if (isHazardCreation) {
         let incType: "FIRE" | "FLOOD" | "ACCIDENT" | "ROADBLOCK" | "SOS" = "ROADBLOCK";
         let severity: "CRITICAL" | "HIGH" | "MODERATE" = "HIGH";
-        let lat = 17.396;
-        let lng = 78.466;
         let radius = 250;
-        let locName = "Hyderabad Corridor";
 
         if (lower.includes("fire") || lower.includes("smoke") || lower.includes("blaze")) {
           incType = "FIRE";
           severity = "CRITICAL";
-          lat = 17.394;
-          lng = 78.468;
           radius = 250;
-          locName = "Commercial District";
         } else if (
           lower.includes("flood") ||
           lower.includes("water") ||
@@ -126,45 +121,36 @@ export default function VoiceCommander({
         ) {
           incType = "FLOOD";
           severity = "HIGH";
-          lat = 17.4055;
-          lng = 78.464;
           radius = 300;
-          locName = "Lakdikapul Underpass";
         } else if (lower.includes("accident") || lower.includes("crash") || lower.includes("collision")) {
           incType = "ACCIDENT";
           severity = "HIGH";
-          lat = 17.398;
-          lng = 78.489;
           radius = 200;
-          locName = "Arterial Highway Junction";
         } else if (lower.includes("sos") || lower.includes("trapped") || lower.includes("medical")) {
           incType = "SOS";
           severity = "CRITICAL";
-          lat = 17.375;
-          lng = 78.48;
           radius = 200;
-          locName = "Sector 04 Residential";
         } else {
           incType = "ROADBLOCK";
           severity = "HIGH";
-          lat = 17.385;
-          lng = 78.4867;
           radius = 250;
-          locName = "Central Transit Corridor";
         }
 
+        // Dynamically resolve location name and coordinates from spoken text
+        const resolved = resolveHyderabadLocation(text);
+
         const hazardPayload: VoiceHazardPayload = {
-          title: `${incType}: Spoken Alert (${locName})`,
+          title: `${incType}: ${resolved.name}`,
           incident_type: incType,
           severity,
-          lat,
-          lng,
+          lat: resolved.lat,
+          lng: resolved.lng,
           radius_meters: radius,
           description: text,
         };
 
         action = "CREATE_HAZARD";
-        feedback = `Hazard zone established: ${incType} emergency at ${locName}.`;
+        feedback = `Hazard zone established: ${incType} emergency deployed at ${resolved.name}.`;
         setLastExecuted(lower);
         setFeedbackMessage(feedback);
         speakTacticalFeedback(feedback);
@@ -172,6 +158,7 @@ export default function VoiceCommander({
         setTimeout(() => setFeedbackMessage(null), 4500);
         return;
       }
+
 
       if (
         lower.includes("move") ||
@@ -479,31 +466,38 @@ export default function VoiceCommander({
             <div className="flex flex-wrap gap-1 pt-1.5 border-t border-white/10">
               <button
                 type="button"
-                onClick={() => processCommand("Create fire hazard")}
+                onClick={() => processCommand("Create fire hazard in Secunderabad")}
                 className="px-2 py-0.5 rounded-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/40 text-[9px] text-red-300 font-bold active:scale-95 transition-all"
               >
-                🔥 Fire
+                🔥 Fire Secunderabad
               </button>
               <button
                 type="button"
-                onClick={() => processCommand("Report flood hazard")}
+                onClick={() => processCommand("Report flood near Charminar")}
                 className="px-2 py-0.5 rounded-full bg-blue-500/20 hover:bg-blue-500/40 border border-blue-500/40 text-[9px] text-blue-300 font-bold active:scale-95 transition-all"
               >
-                🌊 Flood
+                🌊 Flood Charminar
               </button>
               <button
                 type="button"
-                onClick={() => processCommand("Accident on road")}
+                onClick={() => processCommand("Accident in Gachibowli")}
                 className="px-2 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/40 text-[9px] text-amber-300 font-bold active:scale-95 transition-all"
               >
-                🚗 Accident
+                🚗 Accident Gachibowli
+              </button>
+              <button
+                type="button"
+                onClick={() => processCommand("Roadblock in Banjara Hills")}
+                className="px-2 py-0.5 rounded-full bg-purple-500/20 hover:bg-purple-500/40 border border-purple-500/40 text-[9px] text-purple-300 font-bold active:scale-95 transition-all"
+              >
+                🚧 Roadblock Banjara
               </button>
               <button
                 type="button"
                 onClick={() => processCommand("Move fire engine to scene")}
                 className="px-2 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/40 text-[9px] text-emerald-300 font-bold active:scale-95 transition-all"
               >
-                🚀 Move
+                🚀 Move to Scene
               </button>
             </div>
           </div>

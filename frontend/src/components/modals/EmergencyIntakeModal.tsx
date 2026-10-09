@@ -28,6 +28,11 @@ import {
   createCustomIncident,
   submitMultimodalGeminiReport,
 } from "@/lib/api";
+import {
+  resolveHyderabadLocation,
+  COMMON_HYDERABAD_SECTORS,
+  ResolvedLocation,
+} from "@/lib/locations";
 
 interface EmergencyIntakeModalProps {
   isOpen: boolean;
@@ -50,21 +55,36 @@ export default function EmergencyIntakeModal({
 
   // Form states - Manual Pin Drop
   const [manualTitle, setManualTitle] = useState("");
+  const [manualLocationText, setManualLocationText] = useState("Lakdikapul Underpass");
   const [manualType, setManualType] = useState<IncidentType>("ROADBLOCK");
   const [manualSeverity, setManualSeverity] = useState<IncidentSeverity>("HIGH");
   const [manualLat, setManualLat] = useState<number>(17.4055);
-  const [manualLng, setManualLng] = useState<number>(78.4640);
+  const [manualLng, setManualLng] = useState<number>(78.464);
   const [manualRadius, setManualRadius] = useState<number>(250);
   const [manualDescription, setManualDescription] = useState("");
 
   // Sync pinCoordinates from map click
   useEffect(() => {
     if (pinCoordinates) {
-      setManualLng(Number(pinCoordinates[0].toFixed(5)));
-      setManualLat(Number(pinCoordinates[1].toFixed(5)));
-      setManualTitle((prev) => prev || `Hazard Zone near ${pinCoordinates[1].toFixed(3)}°N, ${pinCoordinates[0].toFixed(3)}°E`);
+      const lng = Number(pinCoordinates[0].toFixed(5));
+      const lat = Number(pinCoordinates[1].toFixed(5));
+      setManualLng(lng);
+      setManualLat(lat);
+      setManualLocationText(`Pin: ${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E`);
+      setManualTitle((prev) => prev || `Hazard Zone near ${lat.toFixed(3)}°N, ${lng.toFixed(3)}°E`);
     }
   }, [pinCoordinates]);
+
+  // Handle location text change in manual mode
+  const handleLocationChange = (locationStr: string) => {
+    setManualLocationText(locationStr);
+    const resolved = resolveHyderabadLocation(locationStr);
+    setManualLat(resolved.lat);
+    setManualLng(resolved.lng);
+    if (!manualTitle || manualTitle.startsWith("Hazard") || manualTitle.startsWith("ROADBLOCK") || manualTitle.startsWith("FLOOD") || manualTitle.startsWith("FIRE") || manualTitle.startsWith("ACCIDENT")) {
+      setManualTitle(`${manualType} at ${resolved.name}`);
+    }
+  };
 
   // Voice recording states
   const [isRecording, setIsRecording] = useState(false);
@@ -84,6 +104,9 @@ export default function EmergencyIntakeModal({
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Real-time resolved location preview for text prompt
+  const resolvedTextLocation: ResolvedLocation = resolveHyderabadLocation(textPrompt || manualLocationText);
+
   if (!isOpen) return null;
 
   // Handle Manual Pin Drop Submit
@@ -92,8 +115,27 @@ export default function EmergencyIntakeModal({
     setIsSubmitting(true);
     setErrorMsg(null);
 
-    const title = manualTitle.trim() || `${manualType} Emergency`;
-    const res = await createCustomIncident({
+    const title = manualTitle.trim() || `${manualType} at ${manualLocationText}`;
+    const optimisticIncident: HazardIncident = {
+      id: `inc_${Date.now()}`,
+      title,
+      incident_type: manualType,
+      severity: manualSeverity,
+      lat: manualLat,
+      lng: manualLng,
+      radius_meters: manualRadius,
+      status: "ACTIVE",
+      description: manualDescription || title,
+      created_at: new Date().toISOString(),
+    };
+
+    // Instant optimistic injection into map and state (0ms)
+    onIncidentCreated(optimisticIncident);
+    setIsSubmitting(false);
+    onClose();
+
+    // Background sync to backend database / cache
+    createCustomIncident({
       title,
       incident_type: manualType,
       severity: manualSeverity,
@@ -102,20 +144,7 @@ export default function EmergencyIntakeModal({
       radius_meters: manualRadius,
       description: manualDescription || title,
       status: "ACTIVE",
-    });
-
-    setIsSubmitting(false);
-    if (res && res.incident) {
-      setFeedbackMsg(
-        res.isOfflineFallback
-          ? "Hazard zone deployed to Tactical Twin (Local Mesh Active)"
-          : `Hazard zone deployed to Tactical Twin: ${res.incident.title} (${res.incident.severity})`
-      );
-      onIncidentCreated(res.incident);
-      setTimeout(() => {
-        onClose();
-      }, 400);
-    }
+    }).catch(() => {});
   };
 
   // Voice recording helpers
@@ -200,7 +229,7 @@ export default function EmergencyIntakeModal({
         return;
       }
       payload.audio_base64 = audioBase64;
-      payload.text_report = "Voice memo incident report";
+      payload.text_report = textPrompt || "Voice memo incident report";
     } else {
       if (!textPrompt.trim() && !mediaFileBase64) {
         setErrorMsg("Please provide a text description or upload a photo/video.");
@@ -211,22 +240,50 @@ export default function EmergencyIntakeModal({
       if (mediaFileBase64) payload.image_base64 = mediaFileBase64;
     }
 
-    const result = await submitMultimodalGeminiReport(payload);
-    setIsSubmitting(false);
+    // Dynamically resolve location from the text prompt!
+    const resolved = resolveHyderabadLocation(textPrompt || manualLocationText || "Hyderabad");
+    let incType: IncidentType = "ROADBLOCK";
+    let severity: IncidentSeverity = "HIGH";
+    let radius = 250;
+    const lower = (textPrompt || "").toLowerCase();
 
-    if (result && result.incident) {
-      setFeedbackMsg(
-        result.isOfflineFallback
-          ? "Hazard zone deployed to Tactical Twin (Local Mesh Active)"
-          : `Gemini Analyzed & Deployed: ${result.incident.title} (${result.incident.severity})`
-      );
-      onIncidentCreated(result.incident);
-      setTimeout(() => {
-        onClose();
-      }, 400);
-    } else {
-      setErrorMsg("Failed to parse incident report. Try manual pin drop.");
+    if (lower.includes("fire") || lower.includes("smoke") || lower.includes("blaze")) {
+      incType = "FIRE";
+      severity = "CRITICAL";
+    } else if (lower.includes("flood") || lower.includes("water") || lower.includes("rain")) {
+      incType = "FLOOD";
+      severity = "HIGH";
+      radius = 300;
+    } else if (lower.includes("accident") || lower.includes("crash") || lower.includes("collision")) {
+      incType = "ACCIDENT";
+      severity = "HIGH";
+      radius = 200;
+    } else if (lower.includes("sos") || lower.includes("trapped") || lower.includes("medical")) {
+      incType = "SOS";
+      severity = "CRITICAL";
+      radius = 200;
     }
+
+    const optimisticIncident: HazardIncident = {
+      id: `inc_${Date.now()}`,
+      title: `${incType}: ${resolved.name}`,
+      incident_type: incType,
+      severity,
+      lat: resolved.lat,
+      lng: resolved.lng,
+      radius_meters: radius,
+      status: "ACTIVE",
+      description: textPrompt || `Reported ${incType} at ${resolved.name}`,
+      created_at: new Date().toISOString(),
+    };
+
+    // Instant optimistic injection into map (0ms)
+    onIncidentCreated(optimisticIncident);
+    setIsSubmitting(false);
+    onClose();
+
+    // Background sync to Gemini endpoint
+    submitMultimodalGeminiReport(payload).catch(() => {});
   };
 
   return (
@@ -310,10 +367,10 @@ export default function EmergencyIntakeModal({
               <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-between">
                 <div>
                   <span className="font-bold text-blue-300 block text-[11px]">
-                    Interactive Pin Dropper
+                    Interactive Pin Dropper & Geocoding
                   </span>
-                  <span className="text-[10px] text-gray-400 block">
-                    Coordinates: {manualLat.toFixed(4)}°N, {manualLng.toFixed(4)}°E
+                  <span className="text-[10px] text-gray-400 block font-mono">
+                    Target: {manualLat.toFixed(4)}°N, {manualLng.toFixed(4)}°E
                   </span>
                 </div>
                 <button
@@ -326,6 +383,46 @@ export default function EmergencyIntakeModal({
                 >
                   TAP ON MAP
                 </button>
+              </div>
+
+              {/* Target Location / Place Input with dynamic resolution */}
+              <div>
+                <label className="block text-[10px] text-gray-400 mb-1">
+                  TARGET PLACE / SECTOR (TYPE TO AUTO-RESOLVE)
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={manualLocationText}
+                    onChange={(e) => handleLocationChange(e.target.value)}
+                    placeholder="e.g. Secunderabad, Banjara Hills, Charminar, Gachibowli..."
+                    className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-blue-500 text-xs"
+                  />
+                  <span className="absolute right-2.5 top-2.5 text-[9px] text-emerald-400 font-mono">
+                    ✓ {manualLat.toFixed(3)}°, {manualLng.toFixed(3)}°
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick Sector Chips */}
+              <div className="space-y-1">
+                <span className="text-[9px] text-gray-400 block">QUICK SELECT PLACE / SECTOR:</span>
+                <div className="flex flex-wrap gap-1">
+                  {COMMON_HYDERABAD_SECTORS.slice(0, 8).map((sec) => (
+                    <button
+                      key={sec.key}
+                      type="button"
+                      onClick={() => handleLocationChange(sec.label)}
+                      className={`px-2 py-0.5 rounded-md text-[9px] transition-colors border ${
+                        manualLocationText.toLowerCase().includes(sec.key)
+                          ? "bg-blue-600 text-white border-blue-400 font-bold"
+                          : "bg-white/5 hover:bg-white/10 text-gray-300 border-white/10"
+                      }`}
+                    >
+                      {sec.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div>
@@ -414,7 +511,7 @@ export default function EmergencyIntakeModal({
                     <button
                       type="button"
                       onClick={startRecording}
-                      className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center text-white shadow-xl hover:scale-105 active:scale-95 transition-all"
+                      className="w-14 h-14 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-95"
                     >
                       <Mic className="w-6 h-6" />
                     </button>
@@ -422,25 +519,22 @@ export default function EmergencyIntakeModal({
                     <button
                       type="button"
                       onClick={stopRecording}
-                      className="w-14 h-14 rounded-full bg-amber-600 hover:bg-amber-500 flex items-center justify-center text-white shadow-xl animate-pulse hover:scale-105 active:scale-95 transition-all"
+                      className="w-14 h-14 rounded-full bg-amber-600 hover:bg-amber-500 text-white flex items-center justify-center shadow-lg animate-pulse"
                     >
                       <StopCircle className="w-6 h-6" />
                     </button>
                   )}
                 </div>
 
-                <div className="text-[11px] font-mono">
+                <div className="text-[11px] text-gray-400">
                   {isRecording ? (
                     <span className="text-red-400 font-bold animate-pulse">
-                      RECORDING: {recordingSeconds}s
+                      Recording audio: {recordingSeconds}s
                     </span>
                   ) : audioBlob ? (
-                    <span className="text-emerald-400 font-bold flex items-center justify-center gap-1">
-                      <CheckCircle className="w-3.5 h-3.5" />
-                      Voice Memo Captured
-                    </span>
+                    <span className="text-emerald-400">Audio voice memo ready ({Math.round(audioBlob.size / 1024)} KB)</span>
                   ) : (
-                    <span className="text-gray-400">Tap microphone to record</span>
+                    <span>Tap mic to speak or describe the hazard</span>
                   )}
                 </div>
 
@@ -478,20 +572,59 @@ export default function EmergencyIntakeModal({
             <div className="space-y-3.5">
               <div>
                 <label className="block text-[10px] text-gray-400 mb-1">
-                  UNSTRUCTURED REPORT / PROMPT
+                  UNSTRUCTURED REPORT / PROMPT (TYPE ANY LOCATION)
                 </label>
                 <textarea
                   rows={3}
                   value={textPrompt}
                   onChange={(e) => setTextPrompt(e.target.value)}
-                  placeholder="e.g. Flooding near the metro station, 2 feet of water"
+                  placeholder="e.g. Flooding near the metro station, 2 feet of water accumulating near Secunderabad"
                   className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white focus:outline-none focus:border-blue-500 text-xs"
                 />
               </div>
 
+              {/* Dynamic Live Geocoding Feedback */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 text-[10px]">
+                <div className="flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                  <span>
+                    Detected Place: <strong className="text-white">{resolvedTextLocation.name}</strong>
+                  </span>
+                </div>
+                <span className="font-mono text-emerald-400 font-semibold">
+                  {resolvedTextLocation.lat.toFixed(4)}°N, {resolvedTextLocation.lng.toFixed(4)}°E
+                </span>
+              </div>
+
+              {/* Fast Place Chips for Text Tab */}
+              <div className="space-y-1">
+                <span className="text-[10px] text-gray-400 block">CLICK TO CHANGE PLACE IN PROMPT:</span>
+                <div className="flex flex-wrap gap-1">
+                  {COMMON_HYDERABAD_SECTORS.map((sec) => (
+                    <button
+                      key={sec.key}
+                      type="button"
+                      onClick={() => {
+                        // Replace or append sector to prompt
+                        const currentPrompt = textPrompt.trim();
+                        if (currentPrompt.includes("near") || currentPrompt.includes("at") || currentPrompt.includes("in")) {
+                          // Replace last part or append
+                          setTextPrompt(`${currentPrompt.split("near")[0].split("at")[0].trim()} near ${sec.label}`);
+                        } else {
+                          setTextPrompt(`${currentPrompt} near ${sec.label}`);
+                        }
+                      }}
+                      className="px-2 py-0.5 rounded-md bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] text-blue-300 transition-colors"
+                    >
+                      {sec.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Fast Presets */}
               <div className="space-y-1">
-                <span className="text-[10px] text-gray-400 block">QUICK TEST PRESETS:</span>
+                <span className="text-[10px] text-gray-400 block">QUICK SCENARIO PRESETS:</span>
                 <div className="flex flex-wrap gap-1.5">
                   <button
                     type="button"
@@ -500,7 +633,7 @@ export default function EmergencyIntakeModal({
                     }
                     className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] text-blue-300"
                   >
-                    🌊 Metro Flooding
+                    🌊 Metro Flooding (Lakdikapul)
                   </button>
                   <button
                     type="button"
@@ -509,16 +642,25 @@ export default function EmergencyIntakeModal({
                     }
                     className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] text-red-300"
                   >
-                    🔥 Commercial Fire
+                    🔥 Commercial Fire (Charminar)
                   </button>
                   <button
                     type="button"
                     onClick={() =>
-                      setTextPrompt("Multiple vehicle accident and roadblock halting ambulance transit on Osmania corridor")
+                      setTextPrompt("Multiple vehicle accident and roadblock halting ambulance transit near Secunderabad Junction")
                     }
                     className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] text-amber-300"
                   >
-                    🚧 Corridor Roadblock
+                    🚗 Corridor Accident (Secunderabad)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTextPrompt("Waterlogging and severe traffic gridlock along financial district corridor near Gachibowli")
+                    }
+                    className="px-2 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[9px] text-emerald-300"
+                  >
+                    🌊 Gridlock (Gachibowli)
                   </button>
                 </div>
               </div>

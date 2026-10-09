@@ -402,43 +402,45 @@ export default function LeafletMapContainer({
     }
 
     // Scenario B: BEFORE NAVIGATING (UNACCEPTED / PREVIEWING):
-    // Show MULTIPLE candidate paths so the user/responder can compare choices!
+    // Show candidate paths so the user/responder can compare choices!
+    const bMid1Lat = vehiclePos[0] + (hazardPos[0] - vehiclePos[0]) * 0.33 + 0.002;
+    const bMid1Lng = vehiclePos[1] + (hazardPos[1] - vehiclePos[1]) * 0.33 - 0.002;
+    const bMid2Lat = vehiclePos[0] + (hazardPos[0] - vehiclePos[0]) * 0.66 - 0.001;
+    const bMid2Lng = vehiclePos[1] + (hazardPos[1] - vehiclePos[1]) * 0.66 + 0.002;
+
+    const cMid1Lat = vehiclePos[0] + (hazardPos[0] - vehiclePos[0]) * 0.33 - 0.001;
+    const cMid1Lng = vehiclePos[1] + (hazardPos[1] - vehiclePos[1]) * 0.33 + 0.001;
+    const cMid2Lat = vehiclePos[0] + (hazardPos[0] - vehiclePos[0]) * 0.66 + 0.001;
+    const cMid2Lng = vehiclePos[1] + (hazardPos[1] - vehiclePos[1]) * 0.66 - 0.001;
+
     if (!isNavigating) {
       // 1. Tactical Green Bypass Route (Option B)
       const bypassCoords: [number, number][] = [
         vehiclePos,
-        [17.393, 78.458],
-        [17.395, 78.462],
+        [bMid1Lat, bMid1Lng],
+        [bMid2Lat, bMid2Lng],
         hazardPos,
       ];
-      const bypassCasing = L.polyline(bypassCoords, {
-        color: "#0D281E",
-        weight: 8,
-        opacity: 0.6,
-        lineCap: "round",
-        lineJoin: "round",
-      });
       const bypassLine = L.polyline(bypassCoords, {
-        color: "#2E856E",
+        color: "#10B981",
         weight: 4.5,
-        opacity: selectedAction === "OPTION_B" ? 0.95 : 0.45,
+        opacity: selectedAction === "OPTION_B" ? 0.95 : 0.4,
         lineCap: "round",
         lineJoin: "round",
       });
-      group.addLayer(bypassCasing);
       group.addLayer(bypassLine);
 
       // 2. Direct Congested Route (Option A, Amber Dashed)
       const congestedCoords: [number, number][] = [
         vehiclePos,
-        [17.389, 78.460],
-        [17.392, 78.464],
+        [cMid1Lat, cMid1Lng],
+        [cMid2Lat, cMid2Lng],
         hazardPos,
       ];
       const directLine = L.polyline(congestedCoords, {
         color: "#D97706",
         weight: 3.5,
-        opacity: selectedAction === "OPTION_A" ? 0.95 : 0.45,
+        opacity: selectedAction === "OPTION_A" ? 0.95 : 0.4,
         dashArray: "6, 8",
         lineCap: "round",
         lineJoin: "round",
@@ -448,50 +450,34 @@ export default function LeafletMapContainer({
     }
 
     // Scenario C: WHILE NAVIGATING:
-    // User selected a path: SHOW ONLY 1 SINGLE LINE! Never show 2 lines!
-    if (selectedAction === "OPTION_A") {
-      // User selected Route 1 Direct
-      const directPath: [number, number][] = [
-        vehiclePos,
-        [17.389, 78.460],
-        [17.392, 78.464],
-        hazardPos,
-      ];
-      const singleLine = L.polyline(directPath, {
-        color: "#D97706",
-        weight: 4.5,
-        opacity: 0.95,
-        dashArray: "6, 8",
-        lineCap: "round",
-        lineJoin: "round",
-      });
-      group.addLayer(singleLine);
-    } else {
-      // User selected Route 3 Bypass (Default / Optimal)
-      const bypassPath: [number, number][] = [
-        vehiclePos,
-        [17.393, 78.458],
-        [17.395, 78.462],
-        hazardPos,
-      ];
-      const singleCasing = L.polyline(bypassPath, {
-        color: "#0D281E",
-        weight: 8,
-        opacity: 0.6,
-        lineCap: "round",
-        lineJoin: "round",
-      });
-      const singleLine = L.polyline(bypassPath, {
-        color: "#2E856E",
-        weight: 4.5,
-        opacity: 0.95,
-        lineCap: "round",
-        lineJoin: "round",
-      });
-      group.addLayer(singleCasing);
-      group.addLayer(singleLine);
-    }
+    // User selected a path: Strictly 1 SINGLE clean line connecting vehicle to target!
+    const isDirect = selectedAction === "OPTION_A";
+    const navPath: [number, number][] = isDirect
+      ? [vehiclePos, [cMid1Lat, cMid1Lng], [cMid2Lat, cMid2Lng], hazardPos]
+      : [vehiclePos, [bMid1Lat, bMid1Lng], [bMid2Lat, bMid2Lng], hazardPos];
+
+    const singleActiveLine = L.polyline(navPath, {
+      color: isDirect ? "#D97706" : "#10B981",
+      weight: 5,
+      opacity: 0.95,
+      dashArray: isDirect ? "8, 8" : undefined,
+      lineCap: "round",
+      lineJoin: "round",
+    });
+    group.addLayer(singleActiveLine);
   }, [activeIncidentTarget, currentUser, mapLoaded, lifecycleState, selectedAction]);
+
+  // 7b. Smoothly fly/pan to Active Incident Target whenever created or selected
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoaded || !activeIncidentTarget) return;
+    const lat = activeIncidentTarget.lat || 17.396;
+    const lng = activeIncidentTarget.lng || 78.466;
+    map.flyTo([lat, lng], 15, {
+      animate: true,
+      duration: 1.2,
+    });
+  }, [activeIncidentTarget?.id, activeIncidentTarget?.lat, activeIncidentTarget?.lng, mapLoaded]);
 
 
   // 8. Marked Traffic Hotspots
