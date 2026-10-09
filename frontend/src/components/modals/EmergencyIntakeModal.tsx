@@ -24,6 +24,7 @@ import {
   HazardIncident,
   IncidentSeverity,
   IncidentType,
+  UserRole,
   createCustomIncident,
   submitMultimodalGeminiReport,
 } from "@/lib/api";
@@ -34,6 +35,7 @@ interface EmergencyIntakeModalProps {
   onIncidentCreated: (incident: HazardIncident) => void;
   pinCoordinates: [number, number] | null;
   onStartPinDrop: () => void;
+  currentUserRole?: UserRole;
 }
 
 export default function EmergencyIntakeModal({
@@ -42,6 +44,7 @@ export default function EmergencyIntakeModal({
   onIncidentCreated,
   pinCoordinates,
   onStartPinDrop,
+  currentUserRole = "PUBLIC",
 }: EmergencyIntakeModalProps) {
   const [activeTab, setActiveTab] = useState<"MANUAL" | "VOICE" | "TEXT_MEDIA">("MANUAL");
 
@@ -233,9 +236,26 @@ export default function EmergencyIntakeModal({
         <div className="px-4 py-3 bg-[#161B22] border-b border-white/10 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Radio className="w-4 h-4 text-red-500 animate-pulse" />
-            <span className="font-bold text-sm tracking-wide text-white">
-              EMERGENCY HAZARD INTAKE & PIN DROP
-            </span>
+            <div>
+              <span className="font-bold text-sm tracking-wide text-white block">
+                {currentUserRole === "PUBLIC"
+                  ? "CITIZEN COMMUNITY HAZARD INTAKE"
+                  : currentUserRole === "TRAFFIC_POLICE"
+                  ? "TRAFFIC POLICE CORRIDOR INTAKE"
+                  : "FIELD HAZARD REPORTING TERMINAL"}
+              </span>
+              <span className="text-[9px] text-gray-400 block">
+                {currentUserRole === "PUBLIC" || currentUserRole === "TRAFFIC_POLICE" ? (
+                  <span className="text-emerald-400 font-semibold">
+                    ✓ AUTHORIZED DISPATCH REPORTER ({currentUserRole})
+                  </span>
+                ) : (
+                  <span className="text-amber-400">
+                    ⚠ Responders act on dispatches — Citizens & Traffic Police file hazard intel
+                  </span>
+                )}
+              </span>
+            </div>
           </div>
           <button
             onClick={onClose}

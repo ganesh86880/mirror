@@ -609,13 +609,15 @@ export async function getIncidents(status?: string): Promise<HazardIncident[]> {
     });
     if (res.ok) {
       const data: HazardIncident[] = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        // Cache to localStorage
+      if (Array.isArray(data)) {
+        const local = getLocalIncidents();
+        const backendIds = new Set(data.map((d) => d.id));
+        const merged = [...data, ...local.filter((l) => !backendIds.has(l.id))];
         if (typeof window !== "undefined") {
-          localStorage.setItem(LOCAL_STORAGE_INCIDENTS_KEY, JSON.stringify(data));
-          localStorage.setItem("mirror_cached_incidents", JSON.stringify(data));
+          localStorage.setItem(LOCAL_STORAGE_INCIDENTS_KEY, JSON.stringify(merged));
+          localStorage.setItem("mirror_cached_incidents", JSON.stringify(merged));
         }
-        return data;
+        return merged.length > 0 ? merged : DEFAULT_BASELINE_INCIDENTS;
       }
     }
   } catch (err) {

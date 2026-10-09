@@ -8,13 +8,14 @@ import SlideOverDrawer from "@/components/panels/SlideOverDrawer";
 import EmergencyIntakeModal from "@/components/modals/EmergencyIntakeModal";
 import TacticalLifecycleBanner, { ResponderLifecycleState } from "@/components/panels/TacticalLifecycleBanner";
 import { TrafficHotspot } from "@/components/map/LeafletMapContainer";
-import VoiceCommander, { VoiceActionType } from "@/components/voice/VoiceCommander";
+import VoiceCommander, { VoiceActionType, VoiceHazardPayload } from "@/components/voice/VoiceCommander";
 import {
   DynamicHospital,
   HazardIncident,
   PRESET_USERS,
   UserProfile,
   UserRole,
+  createCustomIncident,
   getActiveUsers,
   getDynamicHospitals,
   getHospitalTriageRecommendation,
@@ -329,8 +330,22 @@ export default function MissionControlDashboard() {
   }, [isDriving, lifecycleState, activeIncidentTarget]);
 
   // 13. Voice Command Intent Dispatcher
-  const handleVoiceCommand = (command: string, actionType: VoiceActionType) => {
+  const handleVoiceCommand = (
+    command: string,
+    actionType: VoiceActionType,
+    hazardPayload?: VoiceHazardPayload
+  ) => {
     switch (actionType) {
+      case "CREATE_HAZARD": {
+        if (hazardPayload) {
+          createCustomIncident(hazardPayload).then((res) => {
+            if (res && res.incident) {
+              handleIncidentCreated(res.incident);
+            }
+          });
+        }
+        break;
+      }
       case "NAVIGATE_MOVE": {
         let target = activeIncidentTarget;
         if (!target && incidents.length > 0) {
@@ -394,6 +409,7 @@ export default function MissionControlDashboard() {
         isPinDropMode={isPinDropMode}
         isHotspotMode={isHotspotMode}
         activeIncidentTarget={activeIncidentTarget}
+        lifecycleState={lifecycleState}
         isGridSimulationActive={isGridSimulationActive}
         onMapClick={handleMapClick}
         onSelectIncident={handleSelectIncident}
@@ -490,6 +506,7 @@ export default function MissionControlDashboard() {
           setIsPinDropMode(true);
           setIsHotspotMode(false);
         }}
+        currentUserRole={currentUser.role}
       />
     </main>
   );

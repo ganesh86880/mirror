@@ -65,6 +65,7 @@ interface LeafletMapContainerProps {
   isPinDropMode?: boolean;
   isHotspotMode?: boolean;
   activeIncidentTarget?: HazardIncident | null;
+  lifecycleState?: string;
   isGridSimulationActive?: boolean;
   onMapClick?: (coords: [number, number]) => void;
   onSelectIncident?: (incident: HazardIncident) => void;
@@ -79,6 +80,7 @@ export default function LeafletMapContainer({
   isPinDropMode = false,
   isHotspotMode = false,
   activeIncidentTarget = null,
+  lifecycleState = "UNACCEPTED",
   isGridSimulationActive = false,
   onMapClick,
   onSelectIncident,
@@ -364,51 +366,133 @@ export default function LeafletMapContainer({
       return;
     }
 
-    // Standard Active Navigation Corridor
-    // 1. Tactical Green Bypass Route
-    const bypassCoords: [number, number][] = [
-      vehiclePos,
-      [17.393, 78.458],
-      [17.395, 78.462],
-      hazardPos,
-    ];
+    const isNavigating =
+      lifecycleState === "NAVIGATING" ||
+      lifecycleState === "AT_SCENE" ||
+      activeIncidentTarget.status === "RESPONDING" ||
+      activeIncidentTarget.status === "CONTAINED";
 
-    const bypassCasing = L.polyline(bypassCoords, {
-      color: "#0D281E",
-      weight: 8,
-      opacity: 0.6,
-      lineCap: "round",
-      lineJoin: "round",
-    });
-    const bypassLine = L.polyline(bypassCoords, {
-      color: "#2E856E",
-      weight: 4.5,
-      opacity: 0.95,
-      lineCap: "round",
-      lineJoin: "round",
-    });
+    // Scenario A: Ambulance reroute to hospital on CONTAINED
+    if (activeIncidentTarget.status === "CONTAINED" && currentUser.role === "AMBULANCE") {
+      const hospitalPos: [number, number] = [17.424, 78.503];
+      const bypassHospCoords: [number, number][] = [
+        vehiclePos,
+        [17.406, 78.478],
+        [17.416, 78.491],
+        hospitalPos,
+      ];
 
-    // 2. Direct Congested Corridor in Warning Amber (Dashed)
-    const congestedCoords: [number, number][] = [
-      vehiclePos,
-      [17.389, 78.460],
-      [17.392, 78.464],
-      hazardPos,
-    ];
+      const casing = L.polyline(bypassHospCoords, {
+        color: "#0D281E",
+        weight: 8,
+        opacity: 0.6,
+        lineCap: "round",
+        lineJoin: "round",
+      });
+      const line = L.polyline(bypassHospCoords, {
+        color: "#2E856E",
+        weight: 4.5,
+        opacity: 0.95,
+        lineCap: "round",
+        lineJoin: "round",
+      });
+      group.addLayer(casing);
+      group.addLayer(line);
+      return;
+    }
 
-    const directLine = L.polyline(congestedCoords, {
-      color: "#D97706",
-      weight: 3.5,
-      opacity: 0.85,
-      dashArray: "6, 8",
-      lineCap: "round",
-      lineJoin: "round",
-    });
+    // Scenario B: BEFORE NAVIGATING (UNACCEPTED / PREVIEWING):
+    // Show MULTIPLE candidate paths so the user/responder can compare choices!
+    if (!isNavigating) {
+      // 1. Tactical Green Bypass Route (Option B)
+      const bypassCoords: [number, number][] = [
+        vehiclePos,
+        [17.393, 78.458],
+        [17.395, 78.462],
+        hazardPos,
+      ];
+      const bypassCasing = L.polyline(bypassCoords, {
+        color: "#0D281E",
+        weight: 8,
+        opacity: 0.6,
+        lineCap: "round",
+        lineJoin: "round",
+      });
+      const bypassLine = L.polyline(bypassCoords, {
+        color: "#2E856E",
+        weight: 4.5,
+        opacity: selectedAction === "OPTION_B" ? 0.95 : 0.45,
+        lineCap: "round",
+        lineJoin: "round",
+      });
+      group.addLayer(bypassCasing);
+      group.addLayer(bypassLine);
 
-    group.addLayer(bypassCasing);
-    group.addLayer(bypassLine);
-    group.addLayer(directLine);
-  }, [activeIncidentTarget, currentUser, mapLoaded]);
+      // 2. Direct Congested Route (Option A, Amber Dashed)
+      const congestedCoords: [number, number][] = [
+        vehiclePos,
+        [17.389, 78.460],
+        [17.392, 78.464],
+        hazardPos,
+      ];
+      const directLine = L.polyline(congestedCoords, {
+        color: "#D97706",
+        weight: 3.5,
+        opacity: selectedAction === "OPTION_A" ? 0.95 : 0.45,
+        dashArray: "6, 8",
+        lineCap: "round",
+        lineJoin: "round",
+      });
+      group.addLayer(directLine);
+      return;
+    }
+
+    // Scenario C: WHILE NAVIGATING:
+    // User selected a path: SHOW ONLY 1 SINGLE LINE! Never show 2 lines!
+    if (selectedAction === "OPTION_A") {
+      // User selected Route 1 Direct
+      const directPath: [number, number][] = [
+        vehiclePos,
+        [17.389, 78.460],
+        [17.392, 78.464],
+        hazardPos,
+      ];
+      const singleLine = L.polyline(directPath, {
+        color: "#D97706",
+        weight: 4.5,
+        opacity: 0.95,
+        dashArray: "6, 8",
+        lineCap: "round",
+        lineJoin: "round",
+      });
+      group.addLayer(singleLine);
+    } else {
+      // User selected Route 3 Bypass (Default / Optimal)
+      const bypassPath: [number, number][] = [
+        vehiclePos,
+        [17.393, 78.458],
+        [17.395, 78.462],
+        hazardPos,
+      ];
+      const singleCasing = L.polyline(bypassPath, {
+        color: "#0D281E",
+        weight: 8,
+        opacity: 0.6,
+        lineCap: "round",
+        lineJoin: "round",
+      });
+      const singleLine = L.polyline(bypassPath, {
+        color: "#2E856E",
+        weight: 4.5,
+        opacity: 0.95,
+        lineCap: "round",
+        lineJoin: "round",
+      });
+      group.addLayer(singleCasing);
+      group.addLayer(singleLine);
+    }
+  }, [activeIncidentTarget, currentUser, mapLoaded, lifecycleState, selectedAction]);
+
 
   // 8. Marked Traffic Hotspots
   useEffect(() => {

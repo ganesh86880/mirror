@@ -4,10 +4,14 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Mic, MicOff, Volume2, Radio, Check, AlertCircle } from "lucide-react";
 import { UserRole } from "@/lib/api";
 
-interface VoiceCommanderProps {
-  currentUserRole: UserRole;
-  isNavigating: boolean;
-  onVoiceCommand: (command: string, actionType: VoiceActionType) => void;
+export interface VoiceHazardPayload {
+  title: string;
+  incident_type: "FIRE" | "FLOOD" | "ACCIDENT" | "ROADBLOCK" | "SOS";
+  severity: "CRITICAL" | "HIGH" | "MODERATE";
+  lat: number;
+  lng: number;
+  radius_meters: number;
+  description: string;
 }
 
 export type VoiceActionType =
@@ -16,9 +20,20 @@ export type VoiceActionType =
   | "ARRIVED_SCENE"
   | "RESOLVE_INCIDENT"
   | "SWITCH_ROLE"
+  | "CREATE_HAZARD"
   | "OPEN_REPORT_MODAL"
   | "TOGGLE_HOTSPOT"
   | "UNKNOWN";
+
+interface VoiceCommanderProps {
+  currentUserRole: UserRole;
+  isNavigating: boolean;
+  onVoiceCommand: (
+    command: string,
+    actionType: VoiceActionType,
+    hazardPayload?: VoiceHazardPayload
+  ) => void;
+}
 
 export default function VoiceCommander({
   currentUserRole,
@@ -58,6 +73,96 @@ export default function VoiceCommander({
 
       let action: VoiceActionType = "UNKNOWN";
       let feedback = "";
+
+      // 1. Direct Voice Hazard Creation (e.g. "Report fire", "Create flood", "Accident near junction")
+      const isHazardCreation =
+        (lower.includes("create") ||
+          lower.includes("report") ||
+          lower.includes("hazard") ||
+          lower.includes("emergency") ||
+          lower.includes("incident") ||
+          lower.includes("fire") ||
+          lower.includes("flood") ||
+          lower.includes("accident") ||
+          lower.includes("roadblock") ||
+          lower.includes("water") ||
+          lower.includes("sos")) &&
+        !lower.startsWith("move") &&
+        !lower.startsWith("navigate") &&
+        !lower.startsWith("go") &&
+        !lower.startsWith("drive") &&
+        !lower.startsWith("switch") &&
+        !lower.startsWith("stop");
+
+      if (isHazardCreation) {
+        let incType: "FIRE" | "FLOOD" | "ACCIDENT" | "ROADBLOCK" | "SOS" = "ROADBLOCK";
+        let severity: "CRITICAL" | "HIGH" | "MODERATE" = "HIGH";
+        let lat = 17.396;
+        let lng = 78.466;
+        let radius = 250;
+        let locName = "Hyderabad Corridor";
+
+        if (lower.includes("fire") || lower.includes("smoke") || lower.includes("blaze")) {
+          incType = "FIRE";
+          severity = "CRITICAL";
+          lat = 17.394;
+          lng = 78.468;
+          radius = 250;
+          locName = "Commercial District";
+        } else if (
+          lower.includes("flood") ||
+          lower.includes("water") ||
+          lower.includes("submerge") ||
+          lower.includes("rain")
+        ) {
+          incType = "FLOOD";
+          severity = "HIGH";
+          lat = 17.4055;
+          lng = 78.464;
+          radius = 300;
+          locName = "Lakdikapul Underpass";
+        } else if (lower.includes("accident") || lower.includes("crash") || lower.includes("collision")) {
+          incType = "ACCIDENT";
+          severity = "HIGH";
+          lat = 17.398;
+          lng = 78.489;
+          radius = 200;
+          locName = "Arterial Highway Junction";
+        } else if (lower.includes("sos") || lower.includes("trapped") || lower.includes("medical")) {
+          incType = "SOS";
+          severity = "CRITICAL";
+          lat = 17.375;
+          lng = 78.48;
+          radius = 200;
+          locName = "Sector 04 Residential";
+        } else {
+          incType = "ROADBLOCK";
+          severity = "HIGH";
+          lat = 17.385;
+          lng = 78.4867;
+          radius = 250;
+          locName = "Central Transit Corridor";
+        }
+
+        const hazardPayload: VoiceHazardPayload = {
+          title: `${incType}: Spoken Alert (${locName})`,
+          incident_type: incType,
+          severity,
+          lat,
+          lng,
+          radius_meters: radius,
+          description: text,
+        };
+
+        action = "CREATE_HAZARD";
+        feedback = `Hazard zone established: ${incType} emergency at ${locName}.`;
+        setLastExecuted(lower);
+        setFeedbackMessage(feedback);
+        speakTacticalFeedback(feedback);
+        onVoiceCommand(lower, action, hazardPayload);
+        setTimeout(() => setFeedbackMessage(null), 4500);
+        return;
+      }
 
       if (
         lower.includes("move") ||
@@ -107,15 +212,6 @@ export default function VoiceCommander({
       } else if (lower.includes("police") || lower.includes("patrol") || lower.includes("traffic")) {
         action = "SWITCH_ROLE";
         feedback = "Tactical profile switched to Traffic Police.";
-      } else if (
-        lower.includes("report") ||
-        lower.includes("hazard") ||
-        lower.includes("emergency") ||
-        lower.includes("intake") ||
-        lower.includes("create")
-      ) {
-        action = "OPEN_REPORT_MODAL";
-        feedback = "Deploying emergency hazard intake terminal.";
       } else if (lower.includes("hotspot") || lower.includes("congestion")) {
         action = "TOGGLE_HOTSPOT";
         feedback = "Traffic hotspot marking mode toggled.";
