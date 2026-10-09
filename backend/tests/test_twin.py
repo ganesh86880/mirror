@@ -137,3 +137,15 @@ def test_mock_city_immutability():
     state1.hospitals[0].occupied_beds = 999  # modify local instance
     state2 = get_mock_twin_state()
     assert state2.hospitals[0].occupied_beds != 999
+
+
+def test_hospital_endpoints_alias():
+    """Verify that both /api/hospitals and /api/db/hospitals return 200 and identical hospital data."""
+    res_alias = client.get("/api/hospitals")
+    res_db = client.get("/api/db/hospitals")
+
+    assert res_alias.status_code == 200
+    assert res_db.status_code == 200
+    assert res_alias.json() == res_db.json()
+    assert len(res_alias.json()) >= 3
+

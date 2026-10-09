@@ -90,7 +90,7 @@ export default function EmergencyIntakeModal({
     setErrorMsg(null);
 
     const title = manualTitle.trim() || `${manualType} Emergency`;
-    const incident = await createCustomIncident({
+    const res = await createCustomIncident({
       title,
       incident_type: manualType,
       severity: manualSeverity,
@@ -102,14 +102,16 @@ export default function EmergencyIntakeModal({
     });
 
     setIsSubmitting(false);
-    if (incident) {
-      setFeedbackMsg(`Zone Established: ${incident.title} (${incident.severity})`);
-      onIncidentCreated(incident);
+    if (res && res.incident) {
+      setFeedbackMsg(
+        res.isOfflineFallback
+          ? "Hazard zone deployed to Tactical Twin (Local Mesh Active)"
+          : `Hazard zone deployed to Tactical Twin: ${res.incident.title} (${res.incident.severity})`
+      );
+      onIncidentCreated(res.incident);
       setTimeout(() => {
         onClose();
-      }, 700);
-    } else {
-      setErrorMsg("Failed to establish hazard zone. Check connection.");
+      }, 400);
     }
   };
 
@@ -210,13 +212,17 @@ export default function EmergencyIntakeModal({
     setIsSubmitting(false);
 
     if (result && result.incident) {
-      setFeedbackMsg(`Gemini Analyzed & Deployed: ${result.incident.title} (${result.incident.severity})`);
+      setFeedbackMsg(
+        result.isOfflineFallback
+          ? "Hazard zone deployed to Tactical Twin (Local Mesh Active)"
+          : `Gemini Analyzed & Deployed: ${result.incident.title} (${result.incident.severity})`
+      );
       onIncidentCreated(result.incident);
       setTimeout(() => {
         onClose();
-      }, 800);
+      }, 400);
     } else {
-      setErrorMsg("Gemini extraction error. Check API key in backend/.env.");
+      setErrorMsg("Failed to parse incident report. Try manual pin drop.");
     }
   };
 

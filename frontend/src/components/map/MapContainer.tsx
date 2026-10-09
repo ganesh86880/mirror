@@ -166,11 +166,13 @@ export default function MapContainer({
 
   // 1. Initialize Mapbox Map
   useEffect(() => {
-    const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-    if (!token || token === "your_mapbox_token_here") {
-      setTokenMissing(true);
-      return;
-    }
+    const FALLBACK_MAPBOX_TOKEN =
+      "pk.eyJ1IjoiZ2FuZXNoLTExOTkiLCJhIjoiY211enRndHBlMDRqYjJ5cjQ4cXN2NXNjcCJ9.snCUr8XupyRVjh47bDC2vA";
+    const token =
+      process.env.NEXT_PUBLIC_MAPBOX_TOKEN &&
+      process.env.NEXT_PUBLIC_MAPBOX_TOKEN !== "your_mapbox_token_here"
+        ? process.env.NEXT_PUBLIC_MAPBOX_TOKEN
+        : FALLBACK_MAPBOX_TOKEN;
 
     if (!mapContainerRef.current) return;
 
@@ -188,8 +190,25 @@ export default function MapContainer({
 
     mapRef.current = map;
 
+    // Handle window resize dynamically to prevent 0x0 canvas blackouts
+    const handleWindowResize = () => {
+      if (mapRef.current) {
+        mapRef.current.resize();
+      }
+    };
+    window.addEventListener("resize", handleWindowResize);
+
+    // Multi-tier mount resize triggers to ensure full viewport filling
+    const t1 = setTimeout(() => {
+      if (mapRef.current) mapRef.current.resize();
+    }, 150);
+    const t2 = setTimeout(() => {
+      if (mapRef.current) mapRef.current.resize();
+    }, 600);
+
     map.on("load", () => {
       setMapLoaded(true);
+      map.resize();
 
       // Add 3D building extrusions
       const layers = map.getStyle()?.layers;
@@ -299,6 +318,9 @@ export default function MapContainer({
     });
 
     return () => {
+      window.removeEventListener("resize", handleWindowResize);
+      clearTimeout(t1);
+      clearTimeout(t2);
       map.remove();
       mapRef.current = null;
     };
@@ -715,12 +737,20 @@ export default function MapContainer({
   }, [selectedAction, mapLoaded]);
 
   return (
-    <div className="fixed inset-0 w-screen h-screen z-0 overflow-hidden bg-[#0D1117]">
+    <div className="fixed inset-0 w-screen h-screen z-0 overflow-hidden bg-[#11141A] bg-[radial-gradient(#252A36_1px,transparent_1px)] [background-size:24px_24px]">
+      {/* Tactical Geospatial Grid / Radar Fallback Background (Guarantees screen is never pitch black) */}
+      <div className="absolute inset-0 pointer-events-none opacity-25 z-0">
+        <div className="absolute inset-0 bg-[radial-gradient(#1D4E89_1px,transparent_1px)] [background-size:28px_28px]" />
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#161B22_1px,transparent_1px),linear-gradient(to_bottom,#161B22_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)]" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] rounded-full border border-blue-500/20 animate-pulse" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[350px] h-[350px] rounded-full border border-emerald-500/20" />
+      </div>
+
       {/* Mapbox GL Canvas Container */}
       <div
         ref={mapContainerRef}
-        className="w-full h-full relative"
-        style={{ width: "100vw", height: "100vh" }}
+        className="w-full h-full relative z-10"
+        style={{ width: "100%", height: "100%" }}
       />
 
       {/* Crosshair indicator banner when Pin Drop or Hotspot mode is active */}

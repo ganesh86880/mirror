@@ -190,6 +190,12 @@ async def compare_simulations() -> OutcomeComparisonResult:
     return compare_all_actions()
 
 
+@app.get("/api/hospitals", tags=["Database"])
+async def api_hospitals() -> List[Dict[str, Any]]:
+    """Returns persistent hospital records from SQLite database (alias)."""
+    return get_all_hospitals()
+
+
 @app.get("/api/db/hospitals", tags=["Database"])
 async def db_hospitals() -> List[Dict[str, Any]]:
     """Returns persistent hospital records from SQLite database."""

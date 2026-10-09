@@ -6,7 +6,7 @@ import { Plus } from "lucide-react";
 import TopFloatingHeader from "@/components/panels/TopFloatingHeader";
 import SlideOverDrawer from "@/components/panels/SlideOverDrawer";
 import EmergencyIntakeModal from "@/components/modals/EmergencyIntakeModal";
-import TacticalLifecycleBanner from "@/components/panels/TacticalLifecycleBanner";
+import TacticalLifecycleBanner, { ResponderLifecycleState } from "@/components/panels/TacticalLifecycleBanner";
 import { TrafficHotspot } from "@/components/map/MapContainer";
 import {
   DynamicHospital,
@@ -61,6 +61,7 @@ export default function MissionControlDashboard() {
   // 2. Interactive Phases 3 & 4 State
   const [activeIncidentTarget, setActiveIncidentTarget] = useState<HazardIncident | null>(null);
   const [isGridSimulationActive, setIsGridSimulationActive] = useState<boolean>(false);
+  const [lifecycleState, setLifecycleState] = useState<ResponderLifecycleState>("UNACCEPTED");
 
   // 3. UI Interactive Overlays State
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
@@ -161,16 +162,50 @@ export default function MissionControlDashboard() {
   };
 
   // 7. Hazard Zone Created from Modal
+  // 7. Hazard Zone Created from Modal
   const handleIncidentCreated = (newIncident: HazardIncident) => {
     setIncidents((prev) => [newIncident, ...prev.filter((i) => i.id !== newIncident.id)]);
-    setActiveIncidentTarget(newIncident);
+    handleSelectIncident(newIncident);
     setIsReportModalOpen(false);
     setPinCoordinates(null);
   };
 
-  // 8. Arrival Lifecycle: Arrived at Scene Transition
+  // 8. Select Incident & Update Responder Dispatch State
+  const handleSelectIncident = (inc: HazardIncident) => {
+    setActiveIncidentTarget(inc);
+    if (inc.status === "RESOLVED") {
+      setLifecycleState("RESOLVED");
+    } else if (inc.status === "CONTAINED") {
+      setLifecycleState("AT_SCENE");
+    } else if (inc.status === "RESPONDING") {
+      setLifecycleState("NAVIGATING");
+    } else {
+      setLifecycleState("UNACCEPTED");
+    }
+  };
+
+  // 9. Accept & Navigate Workflow Transition (Phase 3 & 4)
+  const handleAcceptAndNavigate = async () => {
+    if (!activeIncidentTarget) return;
+    setLifecycleState("NAVIGATING");
+    // Lock bypass corridor (Route 3 / Option B in #2E856E)
+    setSelectedAction("OPTION_B");
+    // Update incident status to RESPONDING
+    await updateIncidentStatus(activeIncidentTarget.id, "RESPONDING");
+    const respondingIncident = {
+      ...activeIncidentTarget,
+      status: "RESPONDING" as const,
+    };
+    setActiveIncidentTarget(respondingIncident);
+    setIncidents((prev) =>
+      prev.map((i) => (i.id === activeIncidentTarget.id ? respondingIncident : i))
+    );
+  };
+
+  // 10. Arrival Lifecycle: Arrived at Scene Transition
   const handleArrivedAtScene = async () => {
     if (!activeIncidentTarget) return;
+    setLifecycleState("AT_SCENE");
 
     if (currentUser.role === "FIRE_ENGINE") {
       // Fire Engine: transition incident to CONTAINED (shrinks red zone by 50% and turns orange)
@@ -178,6 +213,7 @@ export default function MissionControlDashboard() {
       const containedIncident = {
         ...activeIncidentTarget,
         status: "CONTAINED" as const,
+        severity: "HIGH" as const,
         radius_meters: Math.round(activeIncidentTarget.radius_meters * 0.5),
       };
       setActiveIncidentTarget(containedIncident);
@@ -200,15 +236,27 @@ export default function MissionControlDashboard() {
     }
   };
 
-  // 9. Arrival Lifecycle: Case Resolved Transition
+  // 11. Arrival Lifecycle: Case Resolved Transition
   const handleCaseResolved = async () => {
     if (!activeIncidentTarget) return;
+    setLifecycleState("RESOLVED");
 
     const updated = await updateIncidentStatus(activeIncidentTarget.id, "RESOLVED");
+    const resolvedIncident = {
+      ...activeIncidentTarget,
+      status: "RESOLVED" as const,
+      severity: "SAFE" as const,
+    };
     setIncidents((prev) =>
-      prev.map((i) => (i.id === activeIncidentTarget.id ? { ...i, status: "RESOLVED" } : i))
+      prev.map((i) => (i.id === activeIncidentTarget.id ? resolvedIncident : i))
     );
-    setActiveIncidentTarget((prev) => (prev ? { ...prev, status: "RESOLVED" } : null));
+    setActiveIncidentTarget(resolvedIncident);
+
+    // Reset vehicle status to Available
+    setCurrentUser((prev) => ({
+      ...prev,
+      name: prev.name.replace(" (BUSY)", "").replace(" (DISPATCHED)", ""),
+    }));
   };
 
   // Calculate Hospital Triage recommendation
@@ -228,9 +276,7 @@ export default function MissionControlDashboard() {
         activeIncidentTarget={activeIncidentTarget}
         isGridSimulationActive={isGridSimulationActive}
         onMapClick={handleMapClick}
-        onSelectIncident={(inc) => {
-          setActiveIncidentTarget(inc);
-        }}
+        onSelectIncident={handleSelectIncident}
       />
 
       {/* 2. Top Floating Glassmorphism Header Bar */}
@@ -261,7 +307,7 @@ export default function MissionControlDashboard() {
         isGridSimulationActive={isGridSimulationActive}
         onToggleGridSimulation={() => setIsGridSimulationActive((prev) => !prev)}
         onSelectIncident={(inc) => {
-          setActiveIncidentTarget(inc);
+          handleSelectIncident(inc);
           setIsDrawerOpen(false);
         }}
         onResolveIncident={(incId) => {
@@ -283,10 +329,15 @@ export default function MissionControlDashboard() {
         <TacticalLifecycleBanner
           activeIncident={activeIncidentTarget}
           userRole={currentUser.role}
+          lifecycleState={lifecycleState}
           triageText={triageInfo?.recommendationText}
+          onAcceptAndNavigate={handleAcceptAndNavigate}
           onArrivedAtScene={handleArrivedAtScene}
           onCaseResolved={handleCaseResolved}
-          onDismiss={() => setActiveIncidentTarget(null)}
+          onDismiss={() => {
+            setActiveIncidentTarget(null);
+            setLifecycleState("UNACCEPTED");
+          }}
         />
       )}
 

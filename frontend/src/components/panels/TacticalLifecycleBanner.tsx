@@ -4,10 +4,14 @@ import React from "react";
 import { CheckCircle2, Flame, ShieldAlert, Navigation, ArrowRight, X, HeartPulse } from "lucide-react";
 import { HazardIncident, UserRole } from "@/lib/api";
 
+export type ResponderLifecycleState = "UNACCEPTED" | "NAVIGATING" | "AT_SCENE" | "RESOLVED";
+
 interface TacticalLifecycleBannerProps {
   activeIncident: HazardIncident;
   userRole: UserRole;
+  lifecycleState: ResponderLifecycleState;
   triageText?: string;
+  onAcceptAndNavigate: () => void;
   onArrivedAtScene: () => void;
   onCaseResolved: () => void;
   onDismiss: () => void;
@@ -16,27 +20,33 @@ interface TacticalLifecycleBannerProps {
 export default function TacticalLifecycleBanner({
   activeIncident,
   userRole,
+  lifecycleState,
   triageText,
+  onAcceptAndNavigate,
   onArrivedAtScene,
   onCaseResolved,
   onDismiss,
 }: TacticalLifecycleBannerProps) {
   const isFire = userRole === "FIRE_ENGINE";
-  const isContained = activeIncident.status === "CONTAINED";
-  const isResolved = activeIncident.status === "RESOLVED";
+  const isResolved = lifecycleState === "RESOLVED" || activeIncident.status === "RESOLVED";
+  const isAtScene = lifecycleState === "AT_SCENE" || activeIncident.status === "CONTAINED";
+  const isNavigating = lifecycleState === "NAVIGATING" || activeIncident.status === "RESPONDING";
+  const isUnaccepted = lifecycleState === "UNACCEPTED" && !isNavigating && !isAtScene && !isResolved;
 
   return (
     <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-30 w-[94%] max-w-lg pointer-events-auto">
-      <div className="bg-[#0D1117]/90 backdrop-blur-xl border border-white/15 rounded-2xl p-3.5 sm:p-4 shadow-2xl font-mono space-y-2.5">
+      <div className="bg-[#0D1117]/95 backdrop-blur-xl border border-white/15 rounded-2xl p-3.5 sm:p-4 shadow-2xl font-mono space-y-2.5">
         {/* Header row */}
         <div className="flex items-start justify-between gap-2">
           <div className="flex items-center gap-2">
             <span
               className={`w-2.5 h-2.5 rounded-full ${
                 isResolved
-                  ? "bg-emerald-500"
-                  : isContained
+                  ? "bg-[#2E856E]"
+                  : isAtScene
                   ? "bg-amber-500 animate-pulse"
+                  : isNavigating
+                  ? "bg-[#2E856E] animate-pulse"
                   : "bg-red-500 animate-ping"
               }`}
             />
@@ -46,6 +56,17 @@ export default function TacticalLifecycleBanner({
               </span>
               <span className="text-[10px] text-gray-400 block">
                 STATUS: {activeIncident.status} • RADIUS: {activeIncident.radius_meters}m
+                {isNavigating && (
+                  <span className="text-[#2E856E] font-semibold ml-1.5">• NAVIGATING (ROUTE LOCKED)</span>
+                )}
+                {isAtScene && (
+                  <span className="text-amber-400 font-semibold ml-1.5">
+                    • {isFire ? "AT SCENE (CONTAINED 50%)" : "AT SCENE (REROUTE H2)"}
+                  </span>
+                )}
+                {isResolved && (
+                  <span className="text-[#2E856E] font-semibold ml-1.5">• ALL-CLEAR (SAFE)</span>
+                )}
               </span>
             </div>
           </div>
@@ -67,43 +88,57 @@ export default function TacticalLifecycleBanner({
           </div>
         )}
 
-        {/* Interactive Action Buttons */}
-        <div className="grid grid-cols-2 gap-2 pt-1">
-          {/* ARRIVED AT SCENE button */}
-          <button
-            onClick={onArrivedAtScene}
-            disabled={isResolved || isContained}
-            className={`min-h-[44px] px-3 py-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow ${
-              isResolved || isContained
-                ? "bg-white/5 text-gray-500 border-white/5 cursor-not-allowed"
-                : isFire
-                ? "bg-amber-600 hover:bg-amber-500 text-white border-amber-400 shadow-amber-500/20 active:scale-95"
-                : "bg-blue-600 hover:bg-blue-500 text-white border-blue-400 shadow-blue-500/20 active:scale-95"
-            }`}
-          >
-            <Navigation className="w-3.5 h-3.5" />
-            <span>
-              {isContained
-                ? "CONTAINED (50% SHRUNK)"
-                : isFire
-                ? "ARRIVED (CONTAIN)"
-                : "ARRIVED (REROUTE H2)"}
-            </span>
-          </button>
+        {/* 3-Stage Responder Action Workflow */}
+        <div className="pt-1">
+          {/* STAGE 1: UNACCEPTED -> [ ACCEPT & NAVIGATE ] */}
+          {isUnaccepted && (
+            <button
+              onClick={onAcceptAndNavigate}
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-[#2E856E] bg-[#2E856E] hover:bg-[#256f5c] active:scale-[0.98] text-white text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#2E856E]/30 transition-all"
+            >
+              <Navigation className="w-4 h-4 animate-bounce" />
+              <span>[ ACCEPT &amp; NAVIGATE ]</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
 
-          {/* CASE RESOLVED button */}
-          <button
-            onClick={onCaseResolved}
-            disabled={isResolved}
-            className={`min-h-[44px] px-3 py-2 rounded-xl border text-[11px] font-bold flex items-center justify-center gap-1.5 transition-all shadow ${
-              isResolved
-                ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 cursor-not-allowed"
-                : "bg-emerald-600 hover:bg-emerald-500 text-white border-emerald-400 shadow-emerald-500/20 active:scale-95"
-            }`}
-          >
-            <CheckCircle2 className="w-3.5 h-3.5" />
-            <span>{isResolved ? "CASE RESOLVED (SAFE)" : "CASE RESOLVED"}</span>
-          </button>
+          {/* STAGE 2: NAVIGATING -> [ ARRIVED AT SCENE ] */}
+          {isNavigating && (
+            <button
+              onClick={onArrivedAtScene}
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-blue-400 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] text-white text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 transition-all"
+            >
+              <Navigation className="w-4 h-4" />
+              <span>[ ARRIVED AT SCENE ]</span>
+            </button>
+          )}
+
+          {/* STAGE 3: AT_SCENE -> [ CASE RESOLVED ] */}
+          {isAtScene && (
+            <button
+              onClick={onCaseResolved}
+              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl border border-[#2E856E] bg-[#2E856E] hover:bg-[#256f5c] active:scale-[0.98] text-white text-xs font-bold tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-[#2E856E]/30 transition-all"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>[ CASE RESOLVED ]</span>
+            </button>
+          )}
+
+          {/* STAGE 4: RESOLVED -> [ CASE RESOLVED (SAFE) ] */}
+          {isResolved && (
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-h-[44px] px-3 py-2 rounded-xl border border-[#2E856E]/30 bg-[#2E856E]/20 text-[#2E856E] text-xs font-bold flex items-center justify-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>CASE RESOLVED • CORRIDOR SAFE (#2E856E)</span>
+              </div>
+              <button
+                onClick={onDismiss}
+                className="min-h-[44px] px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-gray-300 text-xs font-semibold transition-colors"
+              >
+                DISMISS
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
