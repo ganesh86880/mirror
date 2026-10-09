@@ -53,18 +53,24 @@ def init_database():
         )
     """)
 
-    # 3. Incidents Table
+    # 3. Incidents Table (Dynamic Localized Hazard Zones)
+    cursor.execute("PRAGMA table_info(incidents)")
+    cols = [row[1] for row in cursor.fetchall()]
+    if cols and ("radius_meters" not in cols or "incident_type" not in cols):
+        cursor.execute("DROP TABLE IF EXISTS incidents")
+
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS incidents (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
-            type TEXT NOT NULL,
+            incident_type TEXT NOT NULL,
             severity TEXT NOT NULL,
-            status TEXT NOT NULL,
-            sector_id TEXT NOT NULL,
-            description TEXT NOT NULL,
-            latitude REAL NOT NULL,
-            longitude REAL NOT NULL
+            lat REAL NOT NULL,
+            lng REAL NOT NULL,
+            radius_meters INTEGER NOT NULL DEFAULT 250,
+            status TEXT NOT NULL DEFAULT 'ACTIVE',
+            description TEXT,
+            created_at TEXT
         )
     """)
 
@@ -123,17 +129,6 @@ def init_database():
             ("FE-01", "FIRE", "HEAVY PUMPER", "DISPATCHED", 58, "Sec 04 Fire Hazard", 17.3890, 78.4760),
         ])
 
-    cursor.execute("SELECT COUNT(*) FROM incidents")
-    if cursor.fetchone()[0] == 0:
-        cursor.executemany("""
-            INSERT INTO incidents (id, title, type, severity, status, sector_id, description, latitude, longitude)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            ("INC-04", "Structural Fire Hazard", "FIRE_HAZARD", "CRITICAL", "ACTIVE", "SEC-04", "Commercial blaze spreading toward primary arterial.", 17.3890, 78.4760),
-            ("INC-07", "Water Inundation Surge", "FLOOD_SURGE", "HIGH", "ACTIVE", "SEC-07", "Sub-corridor submerged. Depth 3.5m, impassable for light units.", 17.3820, 78.4850),
-            ("INC-09", "Junction Gridlock", "TRAFFIC_OBSTRUCTION", "HIGH", "ACTIVE", "SEC-09", "Multi-vehicle stall bottlenecking central corridor access.", 17.3980, 78.4890),
-        ])
-
     conn.commit()
     conn.close()
 
@@ -156,13 +151,75 @@ def get_all_units() -> List[Dict[str, Any]]:
     return rows
 
 
-def get_all_incidents() -> List[Dict[str, Any]]:
+def get_all_incidents(status: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Returns dynamic incidents, optionally filtered by status."""
     conn = get_db_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT * FROM incidents")
+    if status:
+        cursor.execute("SELECT * FROM incidents WHERE status = ? ORDER BY rowid DESC", (status,))
+    else:
+        cursor.execute("SELECT * FROM incidents ORDER BY rowid DESC")
     rows = [dict(row) for row in cursor.fetchall()]
     conn.close()
     return rows
+
+
+def get_incident_by_id(incident_id: str) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_incident(
+    incident_id: str,
+    title: str,
+    incident_type: str,
+    severity: str,
+    lat: float,
+    lng: float,
+    radius_meters: int = 250,
+    status: str = "ACTIVE",
+    description: str = "",
+    created_at: Optional[str] = None,
+) -> Dict[str, Any]:
+    import datetime
+    if not created_at:
+        created_at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO incidents (id, title, incident_type, severity, lat, lng, radius_meters, status, description, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (incident_id, title, incident_type, severity, lat, lng, radius_meters, status, description, created_at))
+    conn.commit()
+    cursor.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,))
+    rec = dict(cursor.fetchone())
+    conn.close()
+    return rec
+
+
+def update_incident_status(incident_id: str, new_status: str) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE incidents SET status = ? WHERE id = ?", (new_status, incident_id))
+    conn.commit()
+    cursor.execute("SELECT * FROM incidents WHERE id = ?", (incident_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def delete_incident(incident_id: str) -> bool:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM incidents WHERE id = ?", (incident_id,))
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+    return deleted
 
 
 def dispatch_fire_engine(destination: str = "Sec 04 Fire Hazard", speed: int = 58) -> Dict[str, Any]:

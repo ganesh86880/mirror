@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 from app.routers.ingest import router as ingest_router
 from app.routers.auth import router as auth_router
 from app.routers.users import router as users_router
+from app.routers.incidents import router as incidents_router
 from app.schemas.simulation import (
     ActionId,
     OutcomeComparisonResult,
@@ -43,6 +44,7 @@ app = FastAPI(
 app.include_router(ingest_router)
 app.include_router(auth_router)
 app.include_router(users_router)
+app.include_router(incidents_router)
 
 # CORS: Production configuration supporting Vercel and local development
 app.add_middleware(
