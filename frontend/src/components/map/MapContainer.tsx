@@ -7,30 +7,34 @@ import { HazardIncident, UserProfile, UserRole } from "@/lib/api";
 
 const HYDERABAD_CENTER: [number, number] = [78.466, 17.396];
 
-// Free, tokenless CartoDB Dark Matter raster tile style definition
-export const CARTO_DARK_STYLE: any = {
+// Watermark-free OpenStreetMap raster tile style definition as safety net
+export const OSM_DARK_STYLE: any = {
   version: 8,
   sources: {
-    "carto-dark": {
+    "osm-tiles": {
       type: "raster",
-      tiles: [
-        "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-        "https://b.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-      ],
+      tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
       tileSize: 256,
-      attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
+      attribution: "&copy; OpenStreetMap contributors",
     },
   },
   layers: [
     {
-      id: "carto-dark-layer",
+      id: "osm-tiles-layer",
       type: "raster",
-      source: "carto-dark",
+      source: "osm-tiles",
       minzoom: 0,
-      maxzoom: 20,
+      maxzoom: 19,
+      paint: {
+        "raster-opacity": 0.85,
+        "raster-brightness-max": 0.55,
+        "raster-contrast": 0.25,
+      },
     },
   ],
 };
+export const CARTO_DARK_STYLE = OSM_DARK_STYLE;
+
 
 // Generate precise geodesic circular polygon in meters
 function createCirclePolygon(center: [number, number], radiusInMeters: number, points = 36): number[][] {
@@ -147,24 +151,21 @@ export default function MapContainer({
   const incidentMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
   const hotspotMarkersRef = useRef<Map<string, mapboxgl.Marker>>(new Map());
 
-  // 1. Initialize Mapbox Map with resilient CartoDB Dark Matter fallback
+  // 1. Initialize Mapbox Map with official Mapbox Dark style
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
-    const userToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
-    const hasUserToken = userToken && userToken !== "your_mapbox_token_here" && userToken.startsWith("pk.");
-    const token = hasUserToken
-      ? userToken
-      : "pk.eyJ1IjoiZ2FuZXNoLTExOTkiLCJhIjoiY211enRndHBlMDRqYjJ5cjQ4cXN2NXNjcCJ9.snCUr8XupyRVjh47bDC2vA";
+    const userToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN?.trim();
+    const token =
+      userToken && userToken.startsWith("pk.")
+        ? userToken
+        : "pk.eyJ1IjoiZ2FuZXNoLTExOTkiLCJhIjoiY211enRndHBlMDRqYjJ5cjQ4cXN2NXNjcCJ9.snCUr8XupyRVjh47bDC2vA";
 
     mapboxgl.accessToken = token;
 
-    // Use token vector dark-v11 initially only if valid user token is provided; otherwise boot immediately with CartoDB Dark
-    const initialStyle = hasUserToken ? "mapbox://styles/mapbox/dark-v11" : CARTO_DARK_STYLE;
-
     const map = new mapboxgl.Map({
       container: mapContainerRef.current,
-      style: initialStyle,
+      style: "mapbox://styles/mapbox/dark-v11",
       center: HYDERABAD_CENTER,
       zoom: 14,
       pitch: 45,
@@ -263,14 +264,14 @@ export default function MapContainer({
     map.on("load", setupLayers);
     map.on("style.load", setupLayers);
 
-    // Resilient fallback mechanism: if Mapbox times out or fails (401/403/offline), switch to CartoDB dark raster
+    // Resilient fallback: only switch if Mapbox encounters an explicit authentication rejection (401/403)
     let fallbackTriggered = false;
-    const triggerCartoFallback = () => {
+    const triggerOsmFallback = () => {
       if (fallbackTriggered) return;
       fallbackTriggered = true;
-      console.warn("Mapbox style unavailable/failed. Switching to free CartoDB Dark Matter tiles.");
+      console.warn("Mapbox authentication rejected (401/403). Switching to watermark-free OSM tiles.");
       try {
-        map.setStyle(CARTO_DARK_STYLE);
+        map.setStyle(OSM_DARK_STYLE);
       } catch (e) {
         console.warn("setStyle error:", e);
       }
@@ -278,17 +279,10 @@ export default function MapContainer({
 
     map.on("error", (e: any) => {
       const status = e?.error?.status;
-      const msg = e?.error?.message || "";
-      if (status === 401 || status === 403 || msg.includes("Failed to fetch") || msg.includes("timed out") || msg.includes("forbidden")) {
-        triggerCartoFallback();
+      if (status === 401 || status === 403) {
+        triggerOsmFallback();
       }
     });
-
-    const fallbackTimeout = setTimeout(() => {
-      if (!mapLoadedRef.current) {
-        triggerCartoFallback();
-      }
-    }, 1800);
 
     // Dynamic resize handler
     const handleResize = () => {
@@ -305,7 +299,6 @@ export default function MapContainer({
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      clearTimeout(fallbackTimeout);
       clearTimeout(t1);
       clearTimeout(t2);
       map.remove();
