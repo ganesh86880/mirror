@@ -322,3 +322,179 @@ export async function ingestCitizenReport(
     },
   };
 }
+
+export type UserRole = "AMBULANCE" | "FIRE_ENGINE" | "TRAFFIC_POLICE" | "PUBLIC";
+
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  lat: number;
+  lng: number;
+  is_online: boolean;
+}
+
+export interface AuthResponse {
+  access_token: string;
+  token_type: string;
+  user: UserProfile;
+}
+
+export const PRESET_USERS: Record<UserRole, { email: string; name: string; lat: number; lng: number }> = {
+  AMBULANCE: {
+    email: "ambulance@mirror.emergency",
+    name: "Ambulance Unit 01 (ALS)",
+    lat: 17.3872,
+    lng: 78.4821,
+  },
+  FIRE_ENGINE: {
+    email: "fire@mirror.emergency",
+    name: "Fire Rescue Engine FE-01",
+    lat: 17.3890,
+    lng: 78.4760,
+  },
+  TRAFFIC_POLICE: {
+    email: "police@mirror.emergency",
+    name: "Traffic Patrol Unit 04",
+    lat: 17.3980,
+    lng: 78.4890,
+  },
+  PUBLIC: {
+    email: "citizen@mirror.emergency",
+    name: "Citizen Alert Reporter",
+    lat: 17.3820,
+    lng: 78.4850,
+  },
+};
+
+/**
+ * Log in a user and retrieve access token + profile.
+ */
+export async function loginUser(email: string, password = "password123"): Promise<AuthResponse | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ email, password }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to reach /api/auth/login", err);
+    return null;
+  }
+}
+
+/**
+ * Register a new user.
+ */
+export async function registerUser(
+  name: string,
+  email: string,
+  password = "password123",
+  role: UserRole = "PUBLIC",
+  lat = 17.3850,
+  lng = 78.4867
+): Promise<AuthResponse | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ name, email, password, role, lat, lng }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to reach /api/auth/register", err);
+    return null;
+  }
+}
+
+/**
+ * Retrieve all currently active online users/responders.
+ */
+export async function getActiveUsers(): Promise<UserProfile[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/users/active`, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) throw new Error("Failed to fetch active users");
+    return await res.json();
+  } catch (err) {
+    // Return standard fallback active responders if backend is loading
+    return [
+      {
+        id: "usr-amb-01",
+        name: "Ambulance Unit 01",
+        email: "ambulance@mirror.emergency",
+        role: "AMBULANCE",
+        lat: 17.3872,
+        lng: 78.4821,
+        is_online: true,
+      },
+      {
+        id: "usr-fe-01",
+        name: "Fire Engine FE-01",
+        email: "fire@mirror.emergency",
+        role: "FIRE_ENGINE",
+        lat: 17.3890,
+        lng: 78.4760,
+        is_online: true,
+      },
+      {
+        id: "usr-police-01",
+        name: "Traffic Patrol 04",
+        email: "police@mirror.emergency",
+        role: "TRAFFIC_POLICE",
+        lat: 17.3980,
+        lng: 78.4890,
+        is_online: true,
+      },
+      {
+        id: "usr-public-01",
+        name: "Citizen Public",
+        email: "citizen@mirror.emergency",
+        role: "PUBLIC",
+        lat: 17.3820,
+        lng: 78.4850,
+        is_online: true,
+      },
+    ];
+  }
+}
+
+/**
+ * Update user's live GPS coordinates.
+ */
+export async function updateUserLocation(
+  lat: number,
+  lng: number,
+  token?: string,
+  userId?: string
+): Promise<UserProfile | null> {
+  try {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    const res = await fetch(`${API_BASE_URL}/users/location`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify({ lat, lng, user_id: userId }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (err) {
+    console.warn("Failed to update user location", err);
+    return null;
+  }
+}

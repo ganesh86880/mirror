@@ -68,7 +68,37 @@ def init_database():
         )
     """)
 
+    # 4. Users Table (Multi-User Roles & Live Location)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL,
+            lat REAL NOT NULL,
+            lng REAL NOT NULL,
+            is_online INTEGER NOT NULL DEFAULT 1
+        )
+    """)
+
     conn.commit()
+
+    # Seed users if empty
+    cursor.execute("SELECT COUNT(*) FROM users")
+    if cursor.fetchone()[0] == 0:
+        from app.auth import hash_password
+        default_pw = hash_password("password123")
+        cursor.executemany("""
+            INSERT INTO users (id, name, email, password_hash, role, lat, lng, is_online)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, [
+            ("usr-amb-01", "Ambulance Unit 01", "ambulance@mirror.emergency", default_pw, "AMBULANCE", 17.3872, 78.4821, 1),
+            ("usr-fe-01", "Fire Engine FE-01", "fire@mirror.emergency", default_pw, "FIRE_ENGINE", 17.3890, 78.4760, 1),
+            ("usr-police-01", "Traffic Patrol 04", "police@mirror.emergency", default_pw, "TRAFFIC_POLICE", 17.3980, 78.4890, 1),
+            ("usr-public-01", "Citizen Public", "citizen@mirror.emergency", default_pw, "PUBLIC", 17.3820, 78.4850, 1),
+        ])
+        conn.commit()
 
     # Seed data if empty
     cursor.execute("SELECT COUNT(*) FROM hospitals")
@@ -153,6 +183,83 @@ def dispatch_fire_engine(destination: str = "Sec 04 Fire Hazard", speed: int = 5
     updated = dict(cursor.fetchone())
     conn.close()
     return updated
+
+
+def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE LOWER(email) = LOWER(?)", (email.strip(),))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+
+def create_user(
+    user_id: str,
+    name: str,
+    email: str,
+    password_hash: str,
+    role: str,
+    lat: float = 17.3850,
+    lng: float = 78.4867,
+    is_online: bool = True,
+) -> Dict[str, Any]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        INSERT INTO users (id, name, email, password_hash, role, lat, lng, is_online)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    """, (user_id, name, email.strip().lower(), password_hash, role, lat, lng, 1 if is_online else 0))
+    conn.commit()
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    user = dict(cursor.fetchone())
+    conn.close()
+    return user
+
+
+def get_active_users() -> List[Dict[str, Any]]:
+    """Returns all online responders and users with their coordinates."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        SELECT id, name, email, role, lat, lng, is_online
+        FROM users
+        WHERE is_online = 1
+    """)
+    rows = [dict(row) for row in cursor.fetchall()]
+    conn.close()
+    for r in rows:
+        r["is_online"] = bool(r["is_online"])
+    return rows
+
+
+def update_user_location(user_id: str, lat: float, lng: float) -> Optional[Dict[str, Any]]:
+    """Updates user's GPS coordinates."""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("""
+        UPDATE users
+        SET lat = ?, lng = ?, is_online = 1
+        WHERE id = ?
+    """, (lat, lng, user_id))
+    conn.commit()
+    cursor.execute("SELECT id, name, email, role, lat, lng, is_online FROM users WHERE id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    if not row:
+        return None
+    d = dict(row)
+    d["is_online"] = bool(d["is_online"])
+    return d
 
 
 # Automatically initialize on module import
