@@ -23,16 +23,17 @@ import {
   updateUserLocation,
 } from "@/lib/api";
 
-// Dynamically import full-screen map container with SSR disabled for Mapbox GL
-const MapContainer = dynamic(() => import("@/components/map/MapContainer"), {
+// Dynamically import full-screen zero-API-key tactical map container with SSR disabled
+const MapContainer = dynamic(() => import("@/components/map/LeafletMapContainer"), {
   ssr: false,
   loading: () => (
     <div className="fixed inset-0 w-screen h-screen z-0 bg-[#0D1117] flex flex-col items-center justify-center font-mono text-xs text-gray-400 gap-3">
       <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-      <span>INITIALIZING 3D TACTICAL MAPBOX VIEWPORT...</span>
+      <span>INITIALIZING ZERO-API-KEY TACTICAL MAP...</span>
     </div>
   ),
 });
+
 
 export default function MissionControlDashboard() {
   // 1. Multi-User Authentication & Active Role State

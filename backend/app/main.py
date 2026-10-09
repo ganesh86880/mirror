@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 
 from app.routers.ingest import router as ingest_router
 from app.routers.auth import router as auth_router
@@ -212,6 +212,126 @@ async def db_units() -> List[Dict[str, Any]]:
 async def db_dispatch_fire() -> Dict[str, Any]:
     """Dispatches Fire Engine FE-01 directly to Sector 04 Fire Hazard zone in database."""
     return dispatch_fire_engine()
+
+
+@app.get("/api/map/plotly", response_class=HTMLResponse, tags=["Geospatial"])
+async def get_plotly_map():
+    """
+    Renders an interactive, zero-API-key emergency map using Plotly + OpenStreetMap.
+    Plots all live hazard zones, emergency units, hospitals, and tactical navigation routes.
+    """
+    import plotly.graph_objects as go
+
+    fig = go.Figure()
+
+    # 1. Hospitals (Green markers)
+    hospitals = get_all_hospitals()
+    if hospitals:
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=[h["lat"] for h in hospitals],
+                lon=[h["lng"] for h in hospitals],
+                mode="markers+text",
+                marker=go.scattermapbox.Marker(size=14, color="#10B981"),
+                text=[f"{h['name']}<br>Beds: {h['available_beds']}/{h['capacity']}" for h in hospitals],
+                textposition="top right",
+                name="Hospitals (Triage)",
+            )
+        )
+
+    # 2. Responders / Units (Blue markers)
+    units = get_all_units()
+    if units:
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=[u["lat"] for u in units],
+                lon=[u["lng"] for u in units],
+                mode="markers+text",
+                marker=go.scattermapbox.Marker(size=16, color="#3B82F6"),
+                text=[f"{u['name']} ({u['unit_type']})<br>Status: {u['status']}" for u in units],
+                textposition="bottom right",
+                name="Emergency Responders",
+            )
+        )
+
+    # 3. Dynamic Incidents / Hazard Zones
+    incidents = get_all_incidents()
+    if incidents:
+        colors = {"FIRE": "#EF4444", "FLOOD": "#3B82F6", "ACCIDENT": "#F59E0B", "ROADBLOCK": "#F97316"}
+        fig.add_trace(
+            go.Scattermapbox(
+                lat=[inc["lat"] for inc in incidents],
+                lon=[inc["lng"] for inc in incidents],
+                mode="markers+text",
+                marker=go.scattermapbox.Marker(
+                    size=[max(20, min(45, inc["radius_meters"] // 8)) for inc in incidents],
+                    color=[colors.get(inc["incident_type"], "#EF4444") for inc in incidents],
+                    opacity=0.75,
+                ),
+                text=[f"{inc['title']} ({inc['incident_type']})<br>Radius: {inc['radius_meters']}m" for inc in incidents],
+                textposition="top left",
+                name="Hazard Zones",
+            )
+        )
+
+    # 4. Tactical Bypass Route Line (Green)
+    bypass_lats = [17.388, 17.393, 17.395, 17.396]
+    bypass_lons = [78.455, 78.458, 78.462, 78.466]
+    fig.add_trace(
+        go.Scattermapbox(
+            lat=bypass_lats,
+            lon=bypass_lons,
+            mode="lines",
+            line=dict(width=5, color="#2E856E"),
+            name="Tactical Bypass Route (Clear)",
+        )
+    )
+
+    # 5. Congested Route Line (Amber)
+    congested_lats = [17.388, 17.389, 17.392, 17.396]
+    congested_lons = [78.455, 78.460, 78.464, 78.466]
+    fig.add_trace(
+        go.Scattermapbox(
+            lat=congested_lats,
+            lon=congested_lons,
+            mode="lines",
+            line=dict(width=4, color="#D97706"),
+            name="Congested Direct Route",
+        )
+    )
+
+    # Plotly Open-Street-Map layout (ZERO API KEY REQUIRED)
+    fig.update_layout(
+        mapbox_style="open-street-map",
+        mapbox_center={"lat": 17.396, "lon": 78.466},
+        mapbox_zoom=13.5,
+        margin={"r": 0, "t": 40, "l": 0, "b": 0},
+        title=dict(
+            text="MIRROR // Emergency Tactical Decision Twin (Plotly Open-Street-Map Engine)",
+            font=dict(color="#FFFFFF", size=14, family="monospace"),
+            x=0.02,
+            y=0.98,
+        ),
+        paper_bgcolor="#11141A",
+        plot_bgcolor="#11141A",
+        legend=dict(
+            bgcolor="rgba(22, 27, 34, 0.9)",
+            bordercolor="rgba(255, 255, 255, 0.15)",
+            borderwidth=1,
+            font=dict(color="#F0F6FC", size=11, family="monospace"),
+            x=0.01,
+            y=0.02,
+        ),
+    )
+
+    return HTMLResponse(
+        fig.to_html(
+            include_plotlyjs="cdn",
+            full_html=True,
+            config={"responsive": True, "displayModeBar": True},
+        )
+    )
+
 
 
 if __name__ == "__main__":

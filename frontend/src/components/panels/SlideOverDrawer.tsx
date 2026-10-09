@@ -18,7 +18,7 @@ import {
   Plus,
 } from "lucide-react";
 import { DynamicHospital, HazardIncident, UserProfile, UserRole } from "@/lib/api";
-import { TrafficHotspot } from "../map/MapContainer";
+import { TrafficHotspot } from "../map/LeafletMapContainer";
 
 interface SlideOverDrawerProps {
   isOpen: boolean;
@@ -441,9 +441,26 @@ export default function SlideOverDrawer({
               </div>
             </div>
           )}
+
+          {/* SECTION 7: PYTHON PLOTLY ZERO-KEY MAP */}
+          <div className="space-y-2 p-3 rounded-xl bg-gradient-to-r from-blue-900/20 to-purple-900/20 border border-blue-500/20">
+            <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-blue-400" />
+              PYTHON PLOTLY ENGINE (ZERO API KEY)
+            </span>
+            <a
+              href={`${process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"}/api/map/plotly`}
+              target="_blank"
+              rel="noreferrer"
+              className="w-full flex items-center justify-center gap-2 p-2 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 border border-blue-500/30 text-[10px] font-mono font-bold transition-all"
+            >
+              LAUNCH STANDALONE PLOTLY MAP ↗
+            </a>
+          </div>
         </div>
 
         {/* Drawer Footer */}
+
         <div className="p-3 bg-[#161B22]/80 border-t border-white/10 text-center text-[10px] text-gray-500">
           MIRROR v2.0 • Real-Time Geospatial Twin
         </div>
