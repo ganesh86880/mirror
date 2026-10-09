@@ -2,7 +2,8 @@
 
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import mapboxgl from "mapbox-gl";
-import { AlertTriangle, Sliders, Navigation, ShieldCheck } from "lucide-react";
+import "mapbox-gl/dist/mapbox-gl.css";
+import { AlertTriangle, Sliders, Navigation, ShieldCheck, Layers, Eye } from "lucide-react";
 
 const HYDERABAD_CENTER: [number, number] = [78.4867, 17.3850];
 
@@ -167,6 +168,7 @@ export default function MapContainer({
   const ambMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const feMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const obstacleMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const [viewMode, setViewMode] = useState<"TACTICAL" | "3D">("TACTICAL");
   const [tokenMissing, setTokenMissing] = useState<boolean>(false);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
 
@@ -648,7 +650,7 @@ export default function MapContainer({
   const optATransit = Math.round(22 + (sliderSeverity - 60) * 0.4);
   const optARisk = Math.min(100, Math.round(72 + (sliderSeverity - 60) * 0.533));
 
-  if (tokenMissing) {
+  if (viewMode === "TACTICAL" || tokenMissing || !mapLoaded) {
     // Linear geospatial projection helper for Hyderabad viewport
     const project = (lng: number, lat: number): [number, number] => {
       const minLng = 78.445;
@@ -1015,12 +1017,33 @@ export default function MapContainer({
           </g>
         </svg>
 
-        {/* Top Mode Pill Banner */}
-        <div className="absolute top-3 left-3 z-10 flex items-center gap-2 bg-[#161B22]/95 backdrop-blur border border-[#30363D] px-2.5 py-1 rounded font-mono text-[10px] text-tactical-muted">
-          <span className="w-2 h-2 rounded-full bg-tactical-green animate-pulse" />
-          <span className="text-tactical-text font-bold">TACTICAL 2D TWIN VIEW</span>
-          <span className="text-[#30363D]">|</span>
-          <span className="text-[9px]">3D Photogrammetry available with NEXT_PUBLIC_MAPBOX_TOKEN in .env.local</span>
+        {/* Top Mode Pill Banner & View Switcher */}
+        <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 bg-[#161B22]/95 backdrop-blur border border-[#30363D] p-1 rounded font-mono text-[10px] shadow-md">
+          <button
+            onClick={() => setViewMode("TACTICAL")}
+            className={`px-2 py-0.5 rounded font-bold transition-all flex items-center gap-1 ${
+              viewMode === "TACTICAL"
+                ? "bg-tactical-green text-white shadow-sm"
+                : "text-tactical-muted hover:text-white"
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+            <span>TACTICAL DIGITAL TWIN</span>
+          </button>
+          <button
+            onClick={() => {
+              setViewMode("3D");
+              if (mapRef.current) mapRef.current.resize();
+            }}
+            className={`px-2 py-0.5 rounded font-bold transition-all flex items-center gap-1 ${
+              viewMode === "3D"
+                ? "bg-[#388BFD] text-white shadow-sm"
+                : "text-tactical-muted hover:text-white"
+            }`}
+          >
+            <Layers className="w-3 h-3" />
+            <span>3D MAPBOX</span>
+          </button>
         </div>
 
         {/* Floating Tactical "What-If" Junction Congestion / Flood Slider */}
@@ -1087,6 +1110,26 @@ export default function MapContainer({
   return (
     <div className="relative w-full h-full">
       <div ref={mapContainerRef} className="w-full h-full" />
+
+      {/* Top Mode Pill Banner & View Switcher */}
+      <div className="absolute top-3 left-3 z-20 flex items-center gap-1.5 bg-[#161B22]/95 backdrop-blur border border-[#30363D] p-1 rounded font-mono text-[10px] shadow-md">
+        <button
+          onClick={() => setViewMode("TACTICAL")}
+          className="px-2 py-0.5 rounded font-bold transition-all flex items-center gap-1 text-tactical-muted hover:text-white"
+        >
+          <span>TACTICAL DIGITAL TWIN</span>
+        </button>
+        <button
+          onClick={() => {
+            setViewMode("3D");
+            if (mapRef.current) mapRef.current.resize();
+          }}
+          className="px-2 py-0.5 rounded font-bold transition-all flex items-center gap-1 bg-[#388BFD] text-white shadow-sm"
+        >
+          <Layers className="w-3 h-3" />
+          <span>3D MAPBOX</span>
+        </button>
+      </div>
 
       {/* Floating Tactical "What-If" Junction Congestion / Flood Slider */}
       <div className="absolute top-3 right-3 z-10 w-72 bg-[#161B22]/95 backdrop-blur border border-[#30363D] p-3 rounded font-mono text-[11px] shadow-lg select-none">
