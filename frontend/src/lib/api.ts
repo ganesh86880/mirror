@@ -345,14 +345,14 @@ export const PRESET_USERS: Record<UserRole, { email: string; name: string; lat: 
   AMBULANCE: {
     email: "ambulance@mirror.emergency",
     name: "Ambulance Unit 01 (ALS)",
-    lat: 17.3872,
-    lng: 78.4821,
+    lat: 17.388,
+    lng: 78.455,
   },
   FIRE_ENGINE: {
     email: "fire@mirror.emergency",
     name: "Fire Rescue Engine FE-01",
-    lat: 17.3890,
-    lng: 78.4760,
+    lat: 17.388,
+    lng: 78.455,
   },
   TRAFFIC_POLICE: {
     email: "police@mirror.emergency",
@@ -569,14 +569,14 @@ function updateLocalIncidentStatus(id: string, status: IncidentStatus): HazardIn
 const DEFAULT_BASELINE_INCIDENTS: HazardIncident[] = [
   {
     id: "INC-BASE-01",
-    title: "Structural Fire Hazard: Charminar Commercial Zone",
+    title: "Hazard Zone near 17.396°N, 78.466°E",
     incident_type: "FIRE",
     severity: "CRITICAL",
-    lat: 17.3616,
-    lng: 78.4747,
-    radius_meters: 300,
+    lat: 17.396,
+    lng: 78.466,
+    radius_meters: 250,
     status: "ACTIVE",
-    description: "Commercial facility blaze spreading toward arterial corridor.",
+    description: "Active high-risk emergency hazard zone in arterial corridor.",
     created_at: new Date().toISOString(),
   },
   {

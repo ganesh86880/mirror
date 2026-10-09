@@ -45,12 +45,12 @@ export default function MissionControlDashboard() {
     lng: number;
     token?: string;
   }>({
-    id: "usr-amb-01",
-    name: "Ambulance Unit 01 (ALS)",
-    email: "ambulance@mirror.emergency",
-    role: "AMBULANCE",
-    lat: 17.3872,
-    lng: 78.4821,
+    id: "usr-fe-01",
+    name: "Fire Rescue Engine FE-01",
+    email: "fire@mirror.emergency",
+    role: "FIRE_ENGINE",
+    lat: 17.388,
+    lng: 78.455,
   });
 
   const [activeUsers, setActiveUsers] = useState<UserProfile[]>([]);
@@ -80,12 +80,21 @@ export default function MissionControlDashboard() {
         getDynamicHospitals(),
       ]);
       if (users && users.length > 0) setActiveUsers(users);
-      if (incs) {
+      if (incs && incs.length > 0) {
         setIncidents(incs);
         // Default target active critical incident if none selected
-        if (!activeIncidentTarget && incs.length > 0) {
+        if (!activeIncidentTarget) {
           const activeCrit = incs.find((i) => i.status === "ACTIVE" && i.severity === "CRITICAL") || incs[0];
           setActiveIncidentTarget(activeCrit);
+          setLifecycleState(
+            activeCrit.status === "RESOLVED"
+              ? "RESOLVED"
+              : activeCrit.status === "CONTAINED"
+              ? "AT_SCENE"
+              : activeCrit.status === "RESPONDING"
+              ? "NAVIGATING"
+              : "UNACCEPTED"
+          );
         }
       }
       if (hosps) setHospitals(hosps);
