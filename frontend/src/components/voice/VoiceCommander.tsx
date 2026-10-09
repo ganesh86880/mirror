@@ -52,6 +52,8 @@ export default function VoiceCommander({
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const animFrameRef = useRef<number | null>(null);
+  const speechDebounceRef = useRef<any>(null);
+  const lastExecutedTextRef = useRef<string>("");
 
   // Tactical Text-to-Speech feedback
   const speakTacticalFeedback = useCallback((text: string) => {
@@ -69,6 +71,13 @@ export default function VoiceCommander({
   const processCommand = useCallback(
     (text: string) => {
       const lower = text.toLowerCase().trim();
+      if (!lower) return;
+      if (lastExecutedTextRef.current === lower) return;
+      lastExecutedTextRef.current = lower;
+      setTimeout(() => {
+        lastExecutedTextRef.current = "";
+      }, 2500);
+
       setTranscript(lower);
 
       let action: VoiceActionType = "UNKNOWN";
@@ -321,14 +330,27 @@ export default function VoiceCommander({
 
       recognition.onresult = (event: any) => {
         let currentTranscript = "";
+        let isFinal = false;
         for (let i = event.resultIndex; i < event.results.length; ++i) {
           const item = event.results[i][0].transcript;
           currentTranscript += item;
           if (event.results[i].isFinal) {
-            processCommand(item);
+            isFinal = true;
           }
         }
         setTranscript(currentTranscript);
+
+        if (speechDebounceRef.current) clearTimeout(speechDebounceRef.current);
+
+        if (isFinal) {
+          processCommand(currentTranscript);
+        } else {
+          speechDebounceRef.current = setTimeout(() => {
+            if (currentTranscript.trim().length > 2) {
+              processCommand(currentTranscript);
+            }
+          }, 550);
+        }
       };
 
       recognition.onerror = (event: any) => {
@@ -452,6 +474,38 @@ export default function VoiceCommander({
                 <span className="truncate">{feedbackMessage}</span>
               </div>
             )}
+
+            {/* Quick One-Tap Tactical Voice Command Chips */}
+            <div className="flex flex-wrap gap-1 pt-1.5 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => processCommand("Create fire hazard")}
+                className="px-2 py-0.5 rounded-full bg-red-500/20 hover:bg-red-500/40 border border-red-500/40 text-[9px] text-red-300 font-bold active:scale-95 transition-all"
+              >
+                🔥 Fire
+              </button>
+              <button
+                type="button"
+                onClick={() => processCommand("Report flood hazard")}
+                className="px-2 py-0.5 rounded-full bg-blue-500/20 hover:bg-blue-500/40 border border-blue-500/40 text-[9px] text-blue-300 font-bold active:scale-95 transition-all"
+              >
+                🌊 Flood
+              </button>
+              <button
+                type="button"
+                onClick={() => processCommand("Accident on road")}
+                className="px-2 py-0.5 rounded-full bg-amber-500/20 hover:bg-amber-500/40 border border-amber-500/40 text-[9px] text-amber-300 font-bold active:scale-95 transition-all"
+              >
+                🚗 Accident
+              </button>
+              <button
+                type="button"
+                onClick={() => processCommand("Move fire engine to scene")}
+                className="px-2 py-0.5 rounded-full bg-emerald-500/20 hover:bg-emerald-500/40 border border-emerald-500/40 text-[9px] text-emerald-300 font-bold active:scale-95 transition-all"
+              >
+                🚀 Move
+              </button>
+            </div>
           </div>
         )}
       </div>
