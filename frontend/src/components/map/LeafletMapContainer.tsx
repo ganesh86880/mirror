@@ -103,6 +103,9 @@ export default function LeafletMapContainer({
   const simAmbMarkerRef = useRef<L.Marker | null>(null);
   const simPoliceMarkerRef = useRef<L.Marker | null>(null);
 
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
+  const [isDarkStyle, setIsDarkStyle] = useState<boolean>(true);
+
   // 1. Initialize Leaflet Map (Zero API Key, OpenStreetMap)
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -116,12 +119,14 @@ export default function LeafletMapContainer({
     });
 
     // Add standard OpenStreetMap tiles (100% Free, NO Token, NO Watermarks)
-    const osmLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    const osmLayer = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      subdomains: ["a", "b", "c"],
       maxZoom: 19,
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-      className: "tactical-dark-tiles",
+      className: isDarkStyle ? "tactical-dark-tiles" : "standard-osm-tiles",
     });
     osmLayer.addTo(map);
+    tileLayerRef.current = osmLayer;
 
     // Zoom controls on top right
     L.control.zoom({ position: "topright" }).addTo(map);
@@ -136,10 +141,10 @@ export default function LeafletMapContainer({
     mapRef.current = map;
     setMapLoaded(true);
 
-    // Invalidate size after mount to ensure seamless container fit
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-    }, 200);
+    // Invalidate size across multiple intervals to ensure perfect canvas fill
+    const t1 = setTimeout(() => map.invalidateSize(), 100);
+    const t2 = setTimeout(() => map.invalidateSize(), 300);
+    const t3 = setTimeout(() => map.invalidateSize(), 800);
 
     const handleResize = () => {
       map.invalidateSize();
@@ -148,11 +153,27 @@ export default function LeafletMapContainer({
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      clearTimeout(timer);
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
       map.remove();
       mapRef.current = null;
     };
   }, []);
+
+  // Sync dark style toggle with tile layer container class
+  useEffect(() => {
+    if (!tileLayerRef.current) return;
+    const container = tileLayerRef.current.getContainer();
+    if (container) {
+      if (isDarkStyle) {
+        container.className = "leaflet-tile-pane tactical-dark-tiles";
+      } else {
+        container.className = "leaflet-tile-pane standard-osm-tiles";
+      }
+    }
+  }, [isDarkStyle]);
+
 
   // 2. Map Click Handler for Pin Drop / Hotspot Marking
   useEffect(() => {
@@ -501,8 +522,18 @@ export default function LeafletMapContainer({
       <div
         ref={mapContainerRef}
         className="w-full h-full relative z-10"
-        style={{ width: "100%", height: "100%" }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, width: "100%", height: "100%" }}
       />
+
+      {/* Map Style Switcher (Tactical Dark vs Standard Street OSM) */}
+      <div className="absolute bottom-6 left-6 z-20 pointer-events-auto">
+        <button
+          onClick={() => setIsDarkStyle(!isDarkStyle)}
+          className="bg-[#0D1117]/90 hover:bg-[#161B22] border border-white/20 px-3 py-1.5 rounded-full text-[10px] font-mono text-gray-300 hover:text-white shadow-xl backdrop-blur-md flex items-center gap-1.5 transition-all"
+        >
+          <span>{isDarkStyle ? "🌙 TACTICAL DARK" : "☀️ STREET OSM"}</span>
+        </button>
+      </div>
 
       {/* Crosshair indicator banner when Pin Drop or Hotspot mode is active */}
       {(isPinDropMode || isHotspotMode) && (
@@ -515,4 +546,5 @@ export default function LeafletMapContainer({
       )}
     </div>
   );
+
 }

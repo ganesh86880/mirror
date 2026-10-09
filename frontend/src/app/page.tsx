@@ -7,7 +7,8 @@ import TopFloatingHeader from "@/components/panels/TopFloatingHeader";
 import SlideOverDrawer from "@/components/panels/SlideOverDrawer";
 import EmergencyIntakeModal from "@/components/modals/EmergencyIntakeModal";
 import TacticalLifecycleBanner, { ResponderLifecycleState } from "@/components/panels/TacticalLifecycleBanner";
-import { TrafficHotspot } from "@/components/map/MapContainer";
+import { TrafficHotspot } from "@/components/map/LeafletMapContainer";
+import VoiceCommander, { VoiceActionType } from "@/components/voice/VoiceCommander";
 import {
   DynamicHospital,
   HazardIncident,
@@ -63,6 +64,7 @@ export default function MissionControlDashboard() {
   const [activeIncidentTarget, setActiveIncidentTarget] = useState<HazardIncident | null>(null);
   const [isGridSimulationActive, setIsGridSimulationActive] = useState<boolean>(false);
   const [lifecycleState, setLifecycleState] = useState<ResponderLifecycleState>("UNACCEPTED");
+  const [isDriving, setIsDriving] = useState<boolean>(false);
 
   // 3. UI Interactive Overlays State
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
@@ -198,6 +200,7 @@ export default function MissionControlDashboard() {
   const handleAcceptAndNavigate = async () => {
     if (!activeIncidentTarget) return;
     setLifecycleState("NAVIGATING");
+    setIsDriving(true);
     // Lock bypass corridor (Route 3 / Option B in #2E856E)
     setSelectedAction("OPTION_B");
     // Update incident status to RESPONDING
@@ -261,12 +264,119 @@ export default function MissionControlDashboard() {
       prev.map((i) => (i.id === activeIncidentTarget.id ? resolvedIncident : i))
     );
     setActiveIncidentTarget(resolvedIncident);
+    setIsDriving(false);
 
     // Reset vehicle status to Available
     setCurrentUser((prev) => ({
       ...prev,
       name: prev.name.replace(" (BUSY)", "").replace(" (DISPATCHED)", ""),
     }));
+  };
+
+  // 12. Active Navigation Driving Animation Loop (Physical Token Movement)
+  useEffect(() => {
+    if (!isDriving && lifecycleState !== "NAVIGATING") return;
+    if (!activeIncidentTarget) return;
+
+    const startLat = currentUser.lat || 17.388;
+    const startLng = currentUser.lng || 78.455;
+    const destLat = activeIncidentTarget.lat || 17.396;
+    const destLng = activeIncidentTarget.lng || 78.466;
+
+    // Tactical bypass waypoints
+    const routeWaypoints: [number, number][] = [
+      [startLat, startLng],
+      [17.393, 78.458],
+      [17.395, 78.462],
+      [destLat, destLng],
+    ];
+
+    // Build dense interpolation steps for silky-smooth motion
+    const denseSteps: [number, number][] = [];
+    for (let i = 0; i < routeWaypoints.length - 1; i++) {
+      const p1 = routeWaypoints[i];
+      const p2 = routeWaypoints[i + 1];
+      const segments = 8;
+      for (let s = 0; s <= segments; s++) {
+        const factor = s / segments;
+        denseSteps.push([
+          p1[0] + (p2[0] - p1[0]) * factor,
+          p1[1] + (p2[1] - p1[1]) * factor,
+        ]);
+      }
+    }
+
+    let stepIndex = 0;
+    const driveInterval = setInterval(() => {
+      stepIndex++;
+      if (stepIndex < denseSteps.length) {
+        const [nextLat, nextLng] = denseSteps[stepIndex];
+        setCurrentUser((prev) => ({
+          ...prev,
+          lat: nextLat,
+          lng: nextLng,
+        }));
+        updateUserLocation(nextLat, nextLng, undefined, currentUser.id).catch(() => {});
+      } else {
+        // Reached destination!
+        clearInterval(driveInterval);
+        setIsDriving(false);
+        handleArrivedAtScene();
+      }
+    }, 400);
+
+    return () => clearInterval(driveInterval);
+  }, [isDriving, lifecycleState, activeIncidentTarget]);
+
+  // 13. Voice Command Intent Dispatcher
+  const handleVoiceCommand = (command: string, actionType: VoiceActionType) => {
+    switch (actionType) {
+      case "NAVIGATE_MOVE": {
+        let target = activeIncidentTarget;
+        if (!target && incidents.length > 0) {
+          target = incidents.find((i) => i.status !== "RESOLVED") || incidents[0];
+          setActiveIncidentTarget(target);
+        }
+        setLifecycleState("NAVIGATING");
+        setIsDriving(true);
+        if (target) {
+          updateIncidentStatus(target.id, "RESPONDING").catch(() => {});
+        }
+        break;
+      }
+      case "NAVIGATE_STOP": {
+        setIsDriving(false);
+        break;
+      }
+      case "ARRIVED_SCENE": {
+        handleArrivedAtScene();
+        break;
+      }
+      case "RESOLVE_INCIDENT": {
+        handleCaseResolved();
+        break;
+      }
+      case "SWITCH_ROLE": {
+        if (command.includes("ambulance") || command.includes("medic")) {
+          handleSwitchRole("AMBULANCE");
+        } else if (command.includes("fire")) {
+          handleSwitchRole("FIRE_ENGINE");
+        } else if (command.includes("police") || command.includes("traffic")) {
+          handleSwitchRole("TRAFFIC_POLICE");
+        }
+        break;
+      }
+      case "OPEN_REPORT_MODAL": {
+        setIsReportModalOpen(true);
+        break;
+      }
+      case "TOGGLE_HOTSPOT": {
+        setIsHotspotMode((prev) => !prev);
+        break;
+      }
+      default:
+        break;
+    }
   };
 
   // Calculate Hospital Triage recommendation
@@ -296,6 +406,13 @@ export default function MissionControlDashboard() {
         activeHazardsCount={incidents.filter((i) => i.status === "ACTIVE").length}
         onToggleDrawer={() => setIsDrawerOpen((prev) => !prev)}
         onOpenReportModal={() => setIsReportModalOpen(true)}
+      />
+
+      {/* 2b. Tactical Voice Commander (Mic Audio Input & Speech Control) */}
+      <VoiceCommander
+        currentUserRole={currentUser.role}
+        isNavigating={isDriving || lifecycleState === "NAVIGATING"}
+        onVoiceCommand={handleVoiceCommand}
       />
 
       {/* 3. Collapsible Slide-Over Drawer */}
