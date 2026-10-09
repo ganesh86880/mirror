@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Clock, ShieldAlert, Cpu, Crosshair, AlertTriangle, Radio } from "lucide-react";
+import { Clock, ShieldAlert, Cpu, Crosshair, AlertTriangle, Radio, X } from "lucide-react";
 
 interface CenterTopBarProps {
   globalRisk?: number;
   isDispatched?: boolean;
   onOpenCitizenModal?: () => void;
   alertBanner?: string | null;
+  onDismissAlert?: () => void;
 }
 
 export default function CenterTopBar({
@@ -15,6 +16,7 @@ export default function CenterTopBar({
   isDispatched = false,
   onOpenCitizenModal,
   alertBanner = null,
+  onDismissAlert,
 }: CenterTopBarProps) {
   const [utcTime, setUtcTime] = useState<string>("00:00:00 UTC");
 
@@ -97,9 +99,21 @@ export default function CenterTopBar({
             <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
             <span>ALERT: {alertBanner}</span>
           </div>
-          <span className="text-[9px] bg-black/30 px-1.5 py-0.5 rounded border border-white/20">
-            AUTO-REROUTE TO ROUTE 3 (H2 BYPASS) ENGAGED
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] bg-black/40 px-1.5 py-0.5 rounded border border-white/20 hidden sm:inline">
+              OBSTACLE ACTIVE // ROUTE 3 AVAILABLE
+            </span>
+            {onDismissAlert && (
+              <button
+                onClick={onDismissAlert}
+                title="Dismiss obstacle & evaluate alternatives"
+                className="flex items-center gap-1 bg-white/20 hover:bg-white text-white hover:text-[#C53030] px-2 py-0.5 rounded text-[10px] transition-colors border border-white/30"
+              >
+                <span>CLEAR / DISMISS</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

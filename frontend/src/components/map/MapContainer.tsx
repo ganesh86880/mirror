@@ -165,6 +165,7 @@ export default function MapContainer({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const ambMarkerRef = useRef<mapboxgl.Marker | null>(null);
+  const feMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const obstacleMarkerRef = useRef<mapboxgl.Marker | null>(null);
   const [tokenMissing, setTokenMissing] = useState<boolean>(false);
   const [mapLoaded, setMapLoaded] = useState<boolean>(false);
@@ -433,31 +434,41 @@ export default function MapContainer({
         )
         .addTo(map);
 
-      // Other Fleet Units (Amb-02, FE-01)
-      const otherVehicles = [
-        { id: "Amb-02", type: "Ambulance", status: "Delayed", coords: [78.4910, 17.3745] as [number, number], color: "#D97706" },
-        { id: "FE-01", type: "Fire Engine", status: "Standby", coords: [78.4615, 17.4102] as [number, number], color: "#8B949E" },
-      ];
+      // Amb-02 Delayed Unit
+      const amb02El = document.createElement("div");
+      amb02El.className = "cursor-pointer group flex flex-col items-center";
+      amb02El.innerHTML = `
+        <div class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#161B22] border border-[#30363D] text-[#F0F6FC] shadow flex items-center gap-1">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#D97706]"></span>
+          Amb-02
+        </div>
+        <div class="w-5 h-5 rounded-full flex items-center justify-center bg-[#1C2128] border border-[#30363D] mt-0.5 text-[#D97706]">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+          </svg>
+        </div>
+      `;
+      new mapboxgl.Marker({ element: amb02El, anchor: "bottom" })
+        .setLngLat([78.4910, 17.3745])
+        .addTo(map);
 
-      otherVehicles.forEach((v) => {
-        const el = document.createElement("div");
-        el.className = "cursor-pointer group flex flex-col items-center";
-        el.innerHTML = `
-          <div class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#161B22] border border-[#30363D] text-[#F0F6FC] shadow flex items-center gap-1">
-            <span class="inline-block w-1.5 h-1.5 rounded-full" style="background-color: ${v.color}"></span>
-            ${v.id}
-          </div>
-          <div class="w-5 h-5 rounded-full flex items-center justify-center bg-[#1C2128] border border-[#30363D] mt-0.5" style="color: ${v.color}">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
-            </svg>
-          </div>
-        `;
-
-        new mapboxgl.Marker({ element: el, anchor: "bottom" })
-          .setLngLat(v.coords)
-          .addTo(map);
-      });
+      // FE-01 Fire Engine Unit
+      const feEl = document.createElement("div");
+      feEl.className = "cursor-pointer group flex flex-col items-center";
+      feEl.innerHTML = `
+        <div id="fe-01-badge" class="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-[#161B22] border border-[#30363D] text-[#F0F6FC] shadow flex items-center gap-1">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#8B949E]"></span>
+          <span>FE-01 [STANDBY]</span>
+        </div>
+        <div id="fe-01-icon" class="w-5 h-5 rounded-full flex items-center justify-center bg-[#1C2128] border border-[#30363D] mt-0.5 text-[#8B949E]">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="3 11 22 2 13 21 11 13 3 11"></polygon>
+          </svg>
+        </div>
+      `;
+      feMarkerRef.current = new mapboxgl.Marker({ element: feEl, anchor: "bottom" })
+        .setLngLat([78.4615, 17.4102])
+        .addTo(map);
 
       // 8. Add Hospital Nodes
       HOSPITALS.forEach((h) => {
@@ -507,19 +518,39 @@ export default function MapContainer({
     }
   }, [sliderSeverity, mapLoaded, updateFloodHeight]);
 
-  // Update Amb-01 vehicle marker when dispatched
+  // Update Amb-01 vehicle marker when dispatched based on selectedAction
   useEffect(() => {
     if (!ambMarkerRef.current || !mapLoaded) return;
 
     const badge = document.getElementById("amb-01-badge");
+    const isOptionA = selectedAction === "OPTION_A" || selectedAction === "ROUTE_A";
+    const isOptionC = selectedAction === "OPTION_C" || selectedAction === "DELAY_10";
+
     if (isDispatched) {
-      // Vehicle relocates along Route 3 Bypass towards H2
-      ambMarkerRef.current.setLngLat([78.4910, 17.3980]);
-      if (badge) {
-        badge.innerHTML = `
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#2E856E] animate-ping"></span>
-          <span class="text-[#2E856E]">Amb-01 [DISPATCHED // EN ROUTE H2]</span>
-        `;
+      if (isOptionA) {
+        ambMarkerRef.current.setLngLat([78.4735, 17.3785]);
+        if (badge) {
+          badge.innerHTML = `
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#D97706] animate-ping"></span>
+            <span class="text-[#D97706]">Amb-01 [EN ROUTE H1 OSMANIA]</span>
+          `;
+        }
+      } else if (isOptionC) {
+        ambMarkerRef.current.setLngLat([78.4821, 17.3872]);
+        if (badge) {
+          badge.innerHTML = `
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#8B949E]"></span>
+            <span class="text-[#8B949E]">Amb-01 [HOLDING STAGE 2]</span>
+          `;
+        }
+      } else {
+        ambMarkerRef.current.setLngLat([78.4910, 17.3980]);
+        if (badge) {
+          badge.innerHTML = `
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#2E856E] animate-ping"></span>
+            <span class="text-[#2E856E]">Amb-01 [EN ROUTE H2 GANDHI]</span>
+          `;
+        }
       }
     } else {
       ambMarkerRef.current.setLngLat([78.4821, 17.3872]);
@@ -530,7 +561,39 @@ export default function MapContainer({
         `;
       }
     }
-  }, [isDispatched, mapLoaded]);
+  }, [isDispatched, selectedAction, mapLoaded]);
+
+  // Update FE-01 Fire Engine marker when dispatched to Sector 04
+  useEffect(() => {
+    if (!feMarkerRef.current || !mapLoaded) return;
+
+    const badge = document.getElementById("fe-01-badge");
+    const icon = document.getElementById("fe-01-icon");
+
+    if (isFireDispatched) {
+      feMarkerRef.current.setLngLat([78.4845, 17.3910]);
+      if (badge) {
+        badge.innerHTML = `
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#E05252] animate-ping"></span>
+          <span class="text-[#E05252]">FE-01 [ENGAGING SEC 04 FIRE]</span>
+        `;
+      }
+      if (icon) {
+        icon.className = "w-5 h-5 rounded-full flex items-center justify-center bg-[#1C2128] border border-[#E05252] mt-0.5 text-[#E05252] animate-pulse";
+      }
+    } else {
+      feMarkerRef.current.setLngLat([78.4615, 17.4102]);
+      if (badge) {
+        badge.innerHTML = `
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-[#8B949E]"></span>
+          <span>FE-01 [STANDBY]</span>
+        `;
+      }
+      if (icon) {
+        icon.className = "w-5 h-5 rounded-full flex items-center justify-center bg-[#1C2128] border border-[#30363D] mt-0.5 text-[#8B949E]";
+      }
+    }
+  }, [isFireDispatched, mapLoaded]);
 
   // Dynamically plot citizen-reported obstacle marker
   useEffect(() => {
@@ -605,7 +668,13 @@ export default function MapContainer({
     const isOptionA = selectedAction === "OPTION_A" || selectedAction === "ROUTE_A" || selectedAction === "ROUTE_1";
     const isOptionC = selectedAction === "OPTION_C" || selectedAction === "DELAY_10" || selectedAction === "ROUTE_2";
 
-    const ambCoords = isDispatched ? project(78.4910, 17.3980) : project(78.4821, 17.3872);
+    const ambCoords = isDispatched
+      ? isOptionA
+        ? project(78.4735, 17.3785)
+        : isOptionC
+        ? project(78.4821, 17.3872)
+        : project(78.4910, 17.3980)
+      : project(78.4821, 17.3872);
 
     return (
       <div className="relative w-full h-full bg-[#0D1117] overflow-hidden select-none">
@@ -743,9 +812,9 @@ export default function MapContainer({
             points={toSvgPoints((ROUTE_2_HOLD_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
             fill="none"
             stroke="#8B949E"
-            strokeWidth={isOptionC ? "4" : "2"}
+            strokeWidth={isOptionC ? "5" : "1.5"}
             strokeDasharray="4,4"
-            opacity={isOptionC ? 1 : 0.4}
+            opacity={isOptionC ? 1 : 0.25}
           />
 
           {/* Route 1: Direct to Osmania H1 (Through bottleneck) */}
@@ -753,10 +822,10 @@ export default function MapContainer({
             points={toSvgPoints((ROUTE_1_DIRECT_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
             fill="none"
             stroke="#D97706"
-            strokeWidth={isOptionA ? "5" : "2.5"}
+            strokeWidth={isOptionA ? "6" : "1.5"}
             strokeDasharray={isOptionA ? "none" : "5,4"}
             filter={isOptionA ? "url(#glowAmber)" : undefined}
-            opacity={isOptionA ? 1 : 0.45}
+            opacity={isOptionA ? 1 : 0.25}
           />
 
           {/* Route 3: Sector 11 Bypass to Gandhi H2 (Recommended) */}
@@ -764,9 +833,9 @@ export default function MapContainer({
             points={toSvgPoints((ROUTE_3_BYPASS_GEOJSON.features[0].geometry as GeoJSON.LineString).coordinates)}
             fill="none"
             stroke="#2E856E"
-            strokeWidth={isOptionB ? "5.5" : "3"}
+            strokeWidth={isOptionB ? "6" : "1.5"}
             filter={isOptionB ? "url(#glowGreen)" : undefined}
-            opacity={isOptionB ? 1 : 0.55}
+            opacity={isOptionB ? 1 : 0.25}
           />
 
           {/* Hospital Markers */}
@@ -809,34 +878,95 @@ export default function MapContainer({
           {/* Ambulance Amb-01 Unit Marker */}
           <g transform={`translate(${ambCoords[0]}, ${ambCoords[1]})`}>
             {/* Animated Pulse Rings */}
-            <circle r="16" fill="none" stroke="#2E856E" strokeWidth="1.5" opacity="0.6">
+            <circle
+              r="16"
+              fill="none"
+              stroke={isOptionA ? "#D97706" : isOptionC ? "#8B949E" : "#2E856E"}
+              strokeWidth="1.5"
+              opacity="0.6"
+            >
               <animate attributeName="r" values="8;24;8" dur="2.4s" repeatCount="indefinite" />
               <animate attributeName="opacity" values="0.8;0.1;0.8" dur="2.4s" repeatCount="indefinite" />
             </circle>
-            <circle r="9" fill="#2E856E" stroke="#FFFFFF" strokeWidth="2" />
+            <circle
+              r="9"
+              fill={isOptionA ? "#D97706" : isOptionC ? "#8B949E" : "#2E856E"}
+              stroke="#FFFFFF"
+              strokeWidth="2"
+            />
             {/* Amb-01 Badge */}
             <rect
-              x="-65"
+              x="-75"
               y="-32"
-              width="130"
+              width="150"
               height="20"
               rx="3"
               fill="#11141AE0"
-              stroke="#2E856E"
+              stroke={isOptionA ? "#D97706" : isOptionC ? "#8B949E" : "#2E856E"}
               strokeWidth="1"
             />
             <text
               x="0"
               y="-18"
-              fill="#3FB950"
+              fill={isOptionA ? "#F59E0B" : isOptionC ? "#8B949E" : "#3FB950"}
               fontSize="9"
               fontFamily="monospace"
               fontWeight="bold"
               textAnchor="middle"
             >
-              {isDispatched ? "Amb-01 [EN ROUTE H2]" : "Amb-01 [TRANSIT]"}
+              {isDispatched
+                ? isOptionA
+                  ? "Amb-01 [EN ROUTE H1]"
+                  : isOptionC
+                  ? "Amb-01 [HOLDING STAGE 2]"
+                  : "Amb-01 [EN ROUTE H2]"
+                : "Amb-01 [TRANSIT]"}
             </text>
           </g>
+
+          {/* Fire Engine FE-01 Unit Marker */}
+          {(() => {
+            const feCoords = isFireDispatched
+              ? project(78.4845, 17.3910)
+              : project(78.4615, 17.4102);
+            return (
+              <g transform={`translate(${feCoords[0]}, ${feCoords[1]})`}>
+                {isFireDispatched && (
+                  <circle r="16" fill="none" stroke="#E05252" strokeWidth="1.5" opacity="0.7">
+                    <animate attributeName="r" values="8;24;8" dur="1.6s" repeatCount="indefinite" />
+                    <animate attributeName="opacity" values="0.9;0.1;0.9" dur="1.6s" repeatCount="indefinite" />
+                  </circle>
+                )}
+                <circle
+                  r="9"
+                  fill={isFireDispatched ? "#E05252" : "#484F58"}
+                  stroke="#FFFFFF"
+                  strokeWidth="2"
+                />
+                <rect
+                  x="-75"
+                  y="-32"
+                  width="150"
+                  height="20"
+                  rx="3"
+                  fill="#11141AE0"
+                  stroke={isFireDispatched ? "#E05252" : "#30363D"}
+                  strokeWidth="1"
+                />
+                <text
+                  x="0"
+                  y="-18"
+                  fill={isFireDispatched ? "#FF7B72" : "#8B949E"}
+                  fontSize="9"
+                  fontFamily="monospace"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {isFireDispatched ? "FE-01 [ENGAGING FIRE SEC 04]" : "FE-01 [STANDBY]"}
+                </text>
+              </g>
+            );
+          })()}
 
           {/* Citizen Reported Obstacle Marker (if active) */}
           {obstacleMarker && (() => {

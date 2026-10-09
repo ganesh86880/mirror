@@ -323,9 +323,23 @@ export default function RightPanel({
 
           {/* Primary Action Button */}
           {isDispatched ? (
-            <div className="w-full py-2.5 px-3 rounded font-mono font-bold text-[11px] tracking-wider uppercase bg-[#2E856E20] border border-tactical-green text-tactical-green flex items-center justify-center gap-2">
+            <div
+              className={`w-full py-2.5 px-3 rounded font-mono font-bold text-[11px] tracking-wider uppercase border flex items-center justify-center gap-2 ${
+                isOptionA
+                  ? "bg-[#D9770620] border-tactical-amber text-tactical-amber"
+                  : isOptionC
+                  ? "bg-[#8B949E20] border-[#8B949E] text-[#8B949E]"
+                  : "bg-[#2E856E20] border-tactical-green text-tactical-green"
+              }`}
+            >
               <CheckCircle2 className="w-4 h-4" />
-              <span>ROUTE 3 DISPATCHED // AMB-01 EN ROUTE H2</span>
+              <span>
+                {isOptionA
+                  ? "ROUTE 1 DISPATCHED // AMB-01 EN ROUTE H1"
+                  : isOptionC
+                  ? "STAGE 2 ACTIVE // AMB-01 HOLDING"
+                  : "ROUTE 3 DISPATCHED // AMB-01 EN ROUTE H2"}
+              </span>
             </div>
           ) : (
             <button
@@ -333,10 +347,18 @@ export default function RightPanel({
               className={`w-full py-2.5 px-3 rounded font-mono font-bold text-[11px] tracking-wider uppercase transition-all flex items-center justify-center gap-2 shadow-sm ${
                 isOptionB
                   ? "bg-tactical-green text-white hover:bg-[#256d5a] ring-2 ring-tactical-green/50 active:scale-[0.99]"
-                  : "bg-tactical-panel text-tactical-muted border border-tactical-border hover:text-tactical-text"
+                  : isOptionA
+                  ? "bg-[#D97706] text-white hover:bg-[#B45309] ring-2 ring-[#D97706]/50 active:scale-[0.99]"
+                  : "bg-[#4B5563] text-white hover:bg-[#374151] ring-2 ring-gray-400/50 active:scale-[0.99]"
               }`}
             >
-              <span>[ APPROVE & DISPATCH ROUTE ]</span>
+              <span>
+                {isOptionA
+                  ? "[ APPROVE & DISPATCH ROUTE 1 (H1) ]"
+                  : isOptionC
+                  ? "[ APPROVE STAGED HOLD ]"
+                  : "[ APPROVE & DISPATCH ROUTE 3 (H2) ]"}
+              </span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           )}
